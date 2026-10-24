@@ -6,15 +6,13 @@
 // installer puts on PATH; `binary` overrides that path when it lives elsewhere.
 import { spawn } from 'node:child_process';
 import { defineTool } from '@deepseek-ai/dsh-tools';
+import { ensureBinary } from './bootstrap.js';
 
 export const name = 'samplesearch';
 export const inject = ['tools'];
 
 const DEFAULT_TIMEOUT_MS = 45_000;
 
-function resolveBinary(config) {
-  return (config && config.binary) || process.env.SAMPLESEARCH_BIN || 'samplesearch';
-}
 
 /** Run the CLI once and parse its JSON envelope. */
 function runCli(bin, args, timeoutMs) {
@@ -112,8 +110,18 @@ const outputSpec = {
 };
 
 export function apply(ctx, config) {
-  const bin = resolveBinary(config);
   const timeoutMs = Number(config && config.timeoutMs) > 0 ? Number(config.timeoutMs) : DEFAULT_TIMEOUT_MS;
+  // Resolve (and if necessary install) the binary once, on first tool call, so plugin
+  // registration never blocks startup on a download.
+  let binaryPromise = null;
+  const binary = () => {
+    binaryPromise ??= ensureBinary(config || {}).catch((error) => {
+      binaryPromise = null;
+      throw new Error(`samplesearch is not available: ${error.message}`);
+    });
+    return binaryPromise;
+  };
+  const runWith = async (args) => runCli(await binary(), args, timeoutMs);
 
   ctx.tools.register(
     defineTool({
@@ -130,7 +138,7 @@ export function apply(ctx, config) {
         const cliArgs = ['search', args.query];
         if (args.max_results) cliArgs.push('--max', String(args.max_results));
         if (args.explain) cliArgs.push('--explain');
-        const envelope = await runCli(bin, cliArgs, timeoutMs);
+        const envelope = await runWith(cliArgs);
         return { text: renderEnvelope(envelope) };
       },
     }),
@@ -159,7 +167,7 @@ export function apply(ctx, config) {
           const cliArgs = ['search', query];
           if (args.max_results) cliArgs.push('--max', String(args.max_results));
           try {
-            const envelope = await runCli(bin, cliArgs, timeoutMs);
+            const envelope = await runWith(cliArgs);
             sections.push(`## ${query}\n${renderEnvelope(envelope)}`);
           } catch (error) {
             sections.push(`## ${query}\nsearch failed: ${error.message}`);
@@ -177,7 +185,7 @@ export function apply(ctx, config) {
       parameters: {},
       output: outputSpec,
       async execute() {
-        const envelope = await runCli(bin, ['health'], timeoutMs);
+        const envelope = await runWith(['health']);
         const payload = envelope && envelope.data ? envelope.data : envelope;
         return { text: JSON.stringify(payload, null, 2) };
       },

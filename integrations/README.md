@@ -140,14 +140,14 @@ curl -s http://127.0.0.1:8787/health
 DSH 里我们提供的是**原生插件**：直接 `ctx.tools.register(defineTool(...))` 把 `search` / `batch_search` / `search_health` 注册进工具表，**不需要 MCP 桥、也不需要单独装 `@deepseek-ai/dsh-mcp-client`**。插件名与仓库同名：`samplesearch`。
 
 ```powershell
-# 一条命令装好插件（同时会把当前安装的二进制路径写进插件配置）
-irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
-# 或者手动：
+# 只要装插件（首次调用工具时会自动下载对应平台的二进制，装到 ~/…/samplesearch/bin）
 dsh plugin --profile desktop add 'file:<安装目录>\integrations\dsh-plugin'
+# 或者用安装脚本，一次把二进制、PATH、Skill、插件都装好
+irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
 # 然后重启 DeepSeek Harness，新开一个会话
 ```
 
-插件包 `integrations/dsh-plugin/` 只有两个文件：
+插件包 `integrations/dsh-plugin/` 三个文件：`index.js`（注册工具）、`bootstrap.js`（找/装二进制）、`cordis.patch.yml`（挂载条目）。**装完插件即可用**——`bootstrap.js` 按 `config.binary → SAMPLESEARCH_BIN → PATH → 用户安装目录 → 从 GitHub Release 下载` 的顺序解析，最后一步保证新机器上也能直接用。
 
 ```jsonc
 // package.json —— 它既是 bundle（dsh.bundle.patch）又是插件（index.js）

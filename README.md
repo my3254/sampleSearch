@@ -1,46 +1,65 @@
 # samplesearch
 
-自托管、零 API 费用的 **AI 搜索聚合服务**：用一个本地二进制，给各种 AI Agent 提供「检索 + 结构化结果」，接口与 [AnySearch](https://www.anysearch.com) 契约同构。
+A self-hosted search backend for AI agents. One binary serves an HTTP API, an MCP (stdio) server and a CLI, and all three return the same ranked, filtered results — no search API key, no per-query billing.
 
-- **一个二进制，三种入口**：`serve`（HTTP）/ `mcp`（MCP stdio server）/ `search`（CLI）
-- **零付费 key**：聚合 360（中文主引擎）、Bing（英文/兜底）等公开源
-- **精度优先**：概念匹配 + 7 道过滤链 + 引擎级相关性闸门，宁缺毋滥
-- **Rust**：单文件分发、常驻内存约 20MB
+[中文说明](#中文说明) · [Documentation](docs/) · [Releases](https://github.com/my3254/sampleSearch/releases)
 
-> 状态：M0 + 接入层可用（真实上游验证通过）。垂直域、缓存、热加载在 M1/M2。
+---
 
-## 快速开始
+## What it does
+
+Most "AI search" products are a hosted index with a per-query price. samplesearch takes a different position: it queries public result pages and official data APIs that are free to read, then spends its effort on the part that actually determines answer quality — deciding which results to keep.
+
+- **One binary, three entry points.** `serve` (HTTP), `mcp` (MCP stdio), `search` (one-shot CLI). Same pipeline underneath, so behaviour cannot diverge between clients.
+- **No API key required.** 360 supplies Chinese coverage, Bing supplies English and fallback. Optional overseas engines stay off unless enabled.
+- **Precision before recall.** Query terms are matched as concepts, not as character fragments; seven filters remove aggregator pages, site homepages, entity-only titles and unrelated hits before scoring. Results that would be filler are dropped, and `metadata.filters` reports what was dropped and why.
+- **Rust, single file.** ~6 MB release binary, no runtime, no resident sidecar beyond the one process.
+
+Status: v0.1.0. General web search, filtering, caching and all three transports are implemented and tested against live upstreams. Vertical domains and declarative engine configuration are next (see [Roadmap](#roadmap)).
+
+## Install
+
+Windows (PowerShell):
 
 ```powershell
-$env:CARGO_HOME="$PWD\.cargo-home"
-cargo vendor vendor                      # 一次性：把依赖落到 vendor/（需要能访问 crates.io）
-Copy-Item cargo-config.toml.example .cargo\\config.toml   # 之后即可离线构建
-cargo build --release        # 产物：target\release\samplesearch.exe
-cargo test                   # 29 个单测
+irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
 ```
 
-```powershell
-samplesearch serve                                # 127.0.0.1:8787
-samplesearch search "大模型 推理 优化" -m 5        # CLI，输出 JSON
-samplesearch mcp                                  # MCP stdio server
-```
+macOS / Linux:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8787/v1/search \
-  -H 'content-type: application/json' \
-  -d '{"query":"贵州茅台 2025 年报","max_results":3}'
+curl -fsSL https://raw.githubusercontent.com/my3254/sampleSearch/main/install.sh | bash
 ```
 
-## 接入方式
+The installer downloads the release asset for your platform, installs it under a per-user directory, adds it to `PATH`, installs the agent skill, and prints a ready-to-paste MCP configuration.
 
-| 入口 | 命令 | 适用 |
-| --- | --- | --- |
-| MCP (stdio) | `samplesearch mcp` | Claude Code / Cursor / Windsurf / Codex / DeepSeek Harness |
-| CLI | `samplesearch search "…" -m 5` | 任何能执行命令的 agent |
-| HTTP | `samplesearch serve` | 多 agent 共享、非 Agent 程序 |
+DeepSeek Harness users can add the native plugin in the same step:
 
-客户端配置与 Skill 安装见 [integrations/README.md](integrations/README.md)。
-DSH 用户：`integrations/dsh-plugin/` 是原生插件（直接注册工具，不需要 dsh-mcp-client），`install.ps1 -InstallDshPlugin` 一键装。
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1))) -InstallDshPlugin
+```
+
+Build from source:
+
+```bash
+cargo build --release          # requires Rust 1.80+
+cargo test
+```
+
+## Use it
+
+```bash
+samplesearch search "大模型 推理 优化" -m 5      # JSON envelope on stdout
+samplesearch serve                              # HTTP API on 127.0.0.1:8787
+samplesearch mcp                                # MCP server over stdio
+samplesearch doc                                # usage notes written for agents
+```
+
+MCP clients (Claude Code, Cursor, Codex, Windsurf, DeepSeek Harness):
+
+```jsonc
+{ "mcpServers": { "samplesearch": { "command": "samplesearch", "args": ["mcp"] } } }
+```
 
 ## API
 
@@ -51,59 +70,189 @@ DSH 用户：`integrations/dsh-plugin/` 是原生插件（直接注册工具，�
 ```
 
 ```jsonc
-{ "code": 0, "message": "success", "request_id": "…",
+{
+  "code": 0, "message": "success", "request_id": "…",
   "data": {
-    "results": [{ "title": "", "url": "", "snippet": "", "content": "", "source": "so360", "score": 0.81 }],
+    "results": [
+      { "title": "…", "url": "https://…", "snippet": "…", "content": "…",
+        "source": "so360", "score": 0.816 }
+    ],
     "metadata": {
       "total_results": 5, "search_time_ms": 640, "cached": false,
-      "routing": { "intent": "general_cn", "primary": ["so360"], "secondary": ["bing"], "degraded": ["bing"] },
+      "routing": { "intent": "general_cn", "primary": ["so360"],
+                   "secondary": ["bing"], "degraded": ["bing"] },
       "sources": [{ "name": "so360", "count": 5, "ms": 615, "status": "ok" }],
       "filters": [{ "reason": "low_match", "count": 3 }]
     }
-  } }
+  }
+}
 ```
 
-`metadata.routing` / `filters` / `sources` 是增量字段（AnySearch 无），客户端可忽略。
+The envelope is intentionally compatible with AnySearch's contract, so an existing client only needs its `base_url` changed. `routing`, `sources` and `filters` are additive fields; clients that ignore them still work.
 
-## 设计要点
-
-- **不"都搜一遍"**：按语言/意图选 1 个主引擎 + ≤2 个附加，结果不足才兜底，单次上游请求上限 4；平均端到端 ~200–700ms。
-- **概念匹配**：查询切组、去停用词、去修饰前缀；1 组需 1 命中，2 组需 2，3–4 组需 2。用来干掉"大模型 推理 优化 → 大（汉语文字）"这类实体塌缩。
-- **7 道过滤链**：noise_host / aggregator_title / portal_root / low_match / title_mismatch / entity_page / script_mismatch / dup_content，全部原因回传在 `metadata.filters`。
-- **实测精度**：`node probe/eval.mjs`：过滤前 precision 0.79（34/43）→ 过滤后 1.00（35/35），平均返回 3.9/5（召回靠 M1 加源，不靠放宽过滤）。
-- **不接反爬源**：需要验证码绕过 / cookie 池 / 签名逆向 / 登录态的数据源一律不做。
-
-## 文档
-
-| 文档 | 内容 |
+| Code | Meaning |
 | --- | --- |
-| [docs/2026-10-24-samplesearch-plan.md](docs/2026-10-24-samplesearch-plan.md) | 源可达性实测矩阵、引擎路由、里程碑 |
-| [docs/2026-10-24-architecture.md](docs/2026-10-24-architecture.md) | 插件化渠道（L1 声明式 / L2 原生 / L3 外挂）、热加载、打分管线 |
-| [docs/2026-10-24-precision.md](docs/2026-10-24-precision.md) | 精确度手册：过滤链、阈值、实测数字、误删边界 |
-| [integrations/README.md](integrations/README.md) | MCP / CLI / HTTP / Skill / DSH 安装 |
-| [AGENTS.md](AGENTS.md) | 给编码 Agent 的仓库说明（构建陷阱、约定） |
+| 0 | Success |
+| 400 | Invalid argument (query length, `max_results` range) |
+| 429 | Local rate limit |
+| 502 | Every upstream failed (partial failures still return 0 + `degraded`) |
+| -1 | Internal error |
 
-## 环境注意
+## How accuracy is handled
 
-- `vendor/` 未入库（187MB）。构建前执行一次 `cargo vendor vendor`。
-- 本机 Windows 在沙箱内 `curl`/`cargo` 走 schannel 会报 `SEC_E_NO_CREDENTIALS`：出网探测请用 `node probe/*.mjs`（Node 走 OpenSSL），cargo 依赖拉取需在完全权限会话执行。
-- HTTP 客户端固定使用 **rustls**（`rustls-no-provider` + ring），不要换 native-tls。
+1. **Concept matching.** The query is split into concepts; stop words and modifiers are dropped ("最新政策" → "政策"). Two-concept queries must match both; three or four concepts must match two.
+2. **Engine gate.** If none of an engine's top three results mentions a query concept, that engine is marked `degraded` and its weight is reduced — this is what catches a search engine silently answering with an entity page.
+3. **Filter chain.** Noise hosts, aggregator titles, site homepages, low matches, title-only matches, entity pages, script mismatches and duplicate snippets are removed in a fixed order.
+4. **Scoring and diversification.** Reciprocal-rank fusion across sources, then weighted features (concept coverage, phrase hit, domain authority, freshness, length), then a per-domain cap.
 
-## 目录
+Measured on a nine-query set (`node probe/eval.mjs`): precision rose from 0.79 to 1.00 while the average result count fell from 4.8 to 3.9. That trade is deliberate — see [the precision handbook](docs/2026-10-24-precision.md).
 
-```
-src/
-├─ main.rs        子命令分发 serve / mcp / search / health / doc
-├─ app.rs         AppState + 编排器构造（三入口共用）
-├─ cli.rs  mcp.rs API/CLI/MCP 三个薄壳
-├─ api/           POST /v1/search、GET /health
-├─ engines/       Engine trait + so360 + bing
-└─ core/          orchestrator、relevance、filter、fusion、score、dedupe、normalize
-probe/            Node 探针与评测（可达性、相关性、精度）
-integrations/     各客户端 MCP 配置、Skill、DSH bundle
-docs/             计划、架构、精度手册
-```
+## Limits
+
+- **Upstream quota is the real limit.** 360 and Bing are public result pages, not licensed APIs. Sustained volume triggers captchas or connection resets; this is why the service caches repeated queries for five minutes, cools an engine down for ten minutes after a block, and retries a slow but working engine with a longer budget instead of failing at the fixed tier timeout.
+- **Free sources are not complete.** A query can legitimately return fewer results than requested; the API reports that instead of padding.
+- **No anti-bot evasion.** Sources that require CAPTCHA solving, cookie pools or signature reversing are excluded by design.
+- **Personal use.** Not built or licensed for public hosting or resale; result pages belong to their respective sites.
+
+## Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SAMPLESEARCH_BIND` | `127.0.0.1:8787` | HTTP listen address |
+| `SAMPLESEARCH_TIER_A_TIMEOUT_MS` | `1500` | Primary engine timeout |
+| `SAMPLESEARCH_TIER_B_TIMEOUT_MS` | `2000` | Secondary engine timeout |
+| `SAMPLESEARCH_MAX_UPSTREAM` | `4` | Upstream requests per query |
+| `SAMPLESEARCH_DEFAULT_MAX` | `10` | Default `max_results` |
+| `SAMPLESEARCH_INTL` | `0` | Enable overseas engines |
+| `SAMPLESEARCH_PROXY` | — | Proxy for overseas engines only |
+
+## Integrations
+
+| Client | How |
+| --- | --- |
+| Claude Code, Cursor, Codex, Windsurf | MCP stdio: `samplesearch mcp` |
+| DeepSeek Harness | Native plugin (`integrations/dsh-plugin`), registers tools on `ctx.tools` directly — no MCP bridge, no extra package |
+| Any shell-based agent | `samplesearch search "…" -m 5` |
+| Your own code | `POST /v1/search` |
+
+Per-client snippets: [integrations/README.md](integrations/README.md).
+
+## Documentation
+
+| Document | Contents |
+| --- | --- |
+| [docs/search-sources-survey.md](docs/search-sources-survey.md) | Where search MCP servers get their results, and what we adopt from that |
+| [docs/2026-10-24-architecture.md](docs/2026-10-24-architecture.md) | Pluggable channels (declarative / native / external), hot reload, scoring pipeline |
+| [docs/2026-10-24-precision.md](docs/2026-10-24-precision.md) | Filter chain, thresholds, measured numbers, known false drops |
+| [docs/2026-10-24-samplesearch-plan.md](docs/2026-10-24-samplesearch-plan.md) | Source reachability matrix, routing rules, milestones |
+
+## Roadmap
+
+- **v0.2** — official-API engines (GitHub, Hacker News, arXiv, Crossref, npm, PyPI, StackExchange), per-engine token buckets, engine health in `/health`
+- **v0.3** — declarative engine specs (`config/engines/*.json`) with hot reload; `/v1/sub-domains` and `/v1/extract`
+- **v0.4** — optional keyed providers behind config; weight calibration driven by the evaluation set
 
 ## License
+
+MIT
+
+---
+
+## 中文说明
+
+自托管的搜索后端，服务对象是 AI Agent。一个二进制提供三种入口（HTTP / MCP stdio / CLI），三者返回同一份排序并过滤后的结果；不需要搜索 API key，也不按次计费。
+
+### 定位
+
+市面上多数"AI 搜索"是托管索引 + 按次收费。samplesearch 走另一条路：查询公开结果页与免费官方数据接口，把工程投入放在真正决定回答质量的一环——**决定哪些结果留下来**。
+
+- **一个二进制，三种入口**：`serve`（HTTP）、`mcp`（MCP stdio）、`search`（一次性 CLI）。共用同一套管线，客户端之间不会出现行为差异。
+- **零 API key**：360 覆盖中文，Bing 覆盖英文与兜底；海外源默认关闭，需要时才开。
+- **精度优先于召回**：查询词按"概念"匹配而非字符片段；七道过滤器在打分前剔除聚合页、站点首页、纯实体标题与无关命中。被丢弃的结果会带原因回报在 `metadata.filters` 里。
+- **Rust 单文件**：release 约 6 MB，无运行时依赖。
+
+当前版本 v0.1.0：通用网页搜索、过滤、缓存与三种入口均已实现并对真实上游验证。垂直域与声明式渠道配置在后续版本（见路线图）。
+
+### 安装
+
+```powershell
+# Windows
+irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
+```
+
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/my3254/sampleSearch/main/install.sh | bash
+```
+
+安装脚本会下载对应平台的发布包、装到用户目录、加入 `PATH`、安装 Agent Skill，并打印可直接粘贴的 MCP 配置。
+
+DeepSeek Harness 用户可以同时注册原生插件（不需要额外安装 MCP 桥）：
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1))) -InstallDshPlugin
+```
+
+从源码构建：
+
+```bash
+cargo build --release   # Rust 1.80+
+cargo test
+```
+
+### 使用
+
+```bash
+samplesearch search "大模型 推理 优化" -m 5   # 输出 JSON 信封
+samplesearch serve                           # HTTP 服务，默认 127.0.0.1:8787
+samplesearch mcp                             # MCP stdio server
+samplesearch doc                             # 面向 Agent 的用法说明
+```
+
+MCP 客户端配置：
+
+```jsonc
+{ "mcpServers": { "samplesearch": { "command": "samplesearch", "args": ["mcp"] } } }
+```
+
+### 接口
+
+`POST /v1/search`，请求体 `{"query": "...", "max_results": 5}`，返回信封与 AnySearch 契约同构，现有客户端只需改 `base_url`。`routing` / `sources` / `filters` 为增量字段，忽略它们的客户端不受影响。
+
+### 精度是怎么做的
+
+1. **概念匹配**：查询切分为概念，去掉停用词与修饰前缀（"最新政策" → "政策"）；两个概念必须都命中，三到四个概念命中两个。
+2. **引擎闸门**：某引擎前三名结果都不含任何查询概念时，该引擎标记为 `degraded` 并降权——这是用来识别"搜索引擎悄悄返回实体页"的手段。
+3. **过滤链**：噪声域名、聚合页标题、站点首页、低命中、标题无概念、纯实体页、语种不匹配、重复摘要，按固定顺序剔除。
+4. **融合与重排**：跨源 RRF 融合，再按概念覆盖、整句命中、域名权威度、时效、长度加权排序，最后限制单域名条数。
+
+在九条查询的评测集上（`node probe/eval.mjs`）：准确率从 0.79 提升到 1.00，平均返回条数从 4.8 降到 3.9。这个取舍是刻意的，细节见[精度手册](docs/2026-10-24-precision.md)。
+
+### 已知限制
+
+- **上游配额就是真正的上限**：360 与 Bing 是公开结果页，不是授权 API。持续高频会触发验证码或连接重置；因此我们对同一查询缓存五分钟、被拦后冷却十分钟、并在只剩一个可用引擎时给足超时预算而不是直接失败。
+- **免费源覆盖不全**：结果条数可能少于请求条数，接口如实返回，不拿无关结果凑数。
+- **不做反爬绕过**：需要验证码破解、Cookie 池或签名逆向的源一律不接。
+- **个人使用**：不面向公网托管或转售；结果页版权归各站点所有。
+
+### 配置
+
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `SAMPLESEARCH_BIND` | `127.0.0.1:8787` | HTTP 监听地址 |
+| `SAMPLESEARCH_TIER_A_TIMEOUT_MS` | `1500` | 主引擎超时 |
+| `SAMPLESEARCH_TIER_B_TIMEOUT_MS` | `2000` | 附加引擎超时 |
+| `SAMPLESEARCH_MAX_UPSTREAM` | `4` | 单次查询上游请求上限 |
+| `SAMPLESEARCH_DEFAULT_MAX` | `10` | 默认 `max_results` |
+| `SAMPLESEARCH_INTL` | `0` | 是否启用海外引擎 |
+| `SAMPLESEARCH_PROXY` | — | 仅海外引擎使用的代理 |
+
+### 路线图
+
+- **v0.2**：官方 API 源（GitHub、Hacker News、arXiv、Crossref、npm、PyPI、StackExchange）、每引擎令牌桶、`/health` 暴露引擎健康度
+- **v0.3**：声明式渠道配置（`config/engines/*.json`）与热加载；`/v1/sub-domains`、`/v1/extract`
+- **v0.4**：可选的付费 provider；用评测集校准打分权重
+
+### 许可
 
 MIT
