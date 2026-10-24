@@ -8,7 +8,7 @@ import { spawn } from 'node:child_process';
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import { ensureBinary } from './bootstrap.js';
 
-export const name = 'samplesearch';
+export const name = 'dsh-samplesearch';
 export const inject = ['tools'];
 
 const DEFAULT_TIMEOUT_MS = 45_000;

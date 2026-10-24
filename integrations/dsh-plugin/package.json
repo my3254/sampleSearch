@@ -1,8 +1,8 @@
 {
-  "name": "samplesearch",
+  "name": "dsh-samplesearch",
   "version": "0.1.0",
   "private": true,
-  "description": "Self-hosted search for AI agents — native DeepSeek Harness plugin: registers search tools on ctx.tools directly, with no MCP bridge and no extra package to install.",
+  "description": "DeepSeek Harness plugin for samplesearch: registers search tools on ctx.tools directly, with no MCP bridge and no extra package to install.",
   "type": "module",
   "main": "index.js",
   "exports": {

@@ -137,7 +137,7 @@ curl -s http://127.0.0.1:8787/health
 
 ## 5. DeepSeek Harness（DSH）
 
-DSH 里我们提供的是**原生插件**：直接 `ctx.tools.register(defineTool(...))` 把 `search` / `batch_search` / `search_health` 注册进工具表，**不需要 MCP 桥、也不需要单独装 `@deepseek-ai/dsh-mcp-client`**。插件名与仓库同名：`samplesearch`。
+DSH 里我们提供的是**原生插件**：直接 `ctx.tools.register(defineTool(...))` 把 `search` / `batch_search` / `search_health` 注册进工具表，**不需要 MCP 桥、也不需要单独装 `@deepseek-ai/dsh-mcp-client`**。插件包名是 `dsh-samplesearch`（仓库名仍是 sampleSearch，二进制仍是 `samplesearch`）。
 
 ```powershell
 # 只要装插件（首次调用工具时会自动下载对应平台的二进制，装到 ~/…/samplesearch/bin）
@@ -151,15 +151,15 @@ irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
 
 ```jsonc
 // package.json —— 它既是 bundle（dsh.bundle.patch）又是插件（index.js）
-{ "name": "samplesearch", "type": "module", "main": "index.js",
+{ "name": "dsh-samplesearch", "type": "module", "main": "index.js",
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } } }
 ```
 
 ```yaml
 # cordis.patch.yml —— insert 自己的插件条目
 - insert:
-    - id: samplesearch
-      name: samplesearch
+    - id: dsh-samplesearch
+      name: dsh-samplesearch
       config:
         binary: ''        # 空 = 从 PATH 找；installer 会写入绝对路径
         timeoutMs: 45000

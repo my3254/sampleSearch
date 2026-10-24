@@ -7,8 +7,8 @@
 #
 # `binary: ''` means "resolve `samplesearch` from PATH" (the installer puts it there).
 - insert:
-    - id: samplesearch
-      name: samplesearch
+    - id: dsh-samplesearch
+      name: dsh-samplesearch
       config:
         binary: ''
         timeoutMs: 45000
