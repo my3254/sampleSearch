@@ -1,5 +1,5 @@
 // Check feature flags for reqwest 0.13 / axum 0.8 / tokio / scraper before writing Cargo.toml.
-const UA = 'mysearch-probe/0.1';
+const UA = 'samplesearch-probe/0.1';
 const want = [
   ['reqwest', '0.13.5'],
   ['axum', '0.8.9'],

@@ -40,19 +40,19 @@ impl Config {
             std::env::var(k).ok().and_then(|s| s.parse().ok()).unwrap_or(v)
         };
         Self {
-            bind: std::env::var("MYSEARCH_BIND").unwrap_or(d.bind),
+            bind: std::env::var("SAMPLESEARCH_BIND").unwrap_or(d.bind),
             tier_a_timeout: Duration::from_millis(
-                env_usize("MYSEARCH_TIER_A_TIMEOUT_MS", d.tier_a_timeout.as_millis() as usize) as u64,
+                env_usize("SAMPLESEARCH_TIER_A_TIMEOUT_MS", d.tier_a_timeout.as_millis() as usize) as u64,
             ),
             tier_b_timeout: Duration::from_millis(
-                env_usize("MYSEARCH_TIER_B_TIMEOUT_MS", d.tier_b_timeout.as_millis() as usize) as u64,
+                env_usize("SAMPLESEARCH_TIER_B_TIMEOUT_MS", d.tier_b_timeout.as_millis() as usize) as u64,
             ),
-            max_upstream_requests: env_usize("MYSEARCH_MAX_UPSTREAM", d.max_upstream_requests),
-            default_max_results: env_usize("MYSEARCH_DEFAULT_MAX", d.default_max_results)
+            max_upstream_requests: env_usize("SAMPLESEARCH_MAX_UPSTREAM", d.max_upstream_requests),
+            default_max_results: env_usize("SAMPLESEARCH_DEFAULT_MAX", d.default_max_results)
                 .min(d.max_results_limit),
             max_results_limit: d.max_results_limit,
-            intl_enabled: std::env::var("MYSEARCH_INTL").map(|v| v == "1" || v == "true").unwrap_or(false),
-            proxy: std::env::var("MYSEARCH_PROXY").ok().filter(|s| !s.is_empty()),
+            intl_enabled: std::env::var("SAMPLESEARCH_INTL").map(|v| v == "1" || v == "true").unwrap_or(false),
+            proxy: std::env::var("SAMPLESEARCH_PROXY").ok().filter(|s| !s.is_empty()),
         }
     }
 }

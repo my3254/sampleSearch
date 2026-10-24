@@ -1,5 +1,5 @@
 // What does the awesome-dsh-plugin catalog require from a submission?
-const UA = 'mysearch-probe/0.1';
+const UA = 'samplesearch-probe/0.1';
 
 async function text(url) {
   const r = await fetch(url, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20000) });

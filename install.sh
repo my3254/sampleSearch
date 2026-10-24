@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Install mysearch (self-hosted search for AI agents) on macOS / Linux.
+# Install samplesearch (self-hosted search for AI agents) on macOS / Linux.
 #
 #   curl -fsSL https://raw.githubusercontent.com/my3254/sampleSearch/main/install.sh | bash
 #
 # Options (as arguments or env):
 #   --version <tag|latest>     release to install (default: latest)
-#   --prefix <dir>             install root (default: ~/.local/share/mysearch)
+#   --prefix <dir>             install root (default: ~/.local/share/samplesearch)
 #   --from-local <dir>         install from an extracted release directory
 #   --skip-skill               do not install the agent skill
 #   --no-path                  do not touch shell profile / symlink
 set -euo pipefail
 
-REPO="${MYSEARCH_REPO:-my3254/sampleSearch}"
+REPO="${SAMPLESEARCH_REPO:-my3254/sampleSearch}"
 VERSION="latest"
-PREFIX="${MYSEARCH_PREFIX:-$HOME/.local/share/mysearch}"
+PREFIX="${SAMPLESEARCH_PREFIX:-$HOME/.local/share/samplesearch}"
 FROM_LOCAL=""
 SKIP_SKILL=0
 NO_PATH=0
@@ -64,7 +64,7 @@ else
   fi
   say "resolving release ($VERSION)"
   REL_JSON="$TMP/release.json"
-  curl -fsSL -H 'user-agent: mysearch-installer' "$API" -o "$REL_JSON"
+  curl -fsSL -H 'user-agent: samplesearch-installer' "$API" -o "$REL_JSON"
   URL="$(grep -o "\"browser_download_url\": *\"[^\"]*${ASSET}\"" "$REL_JSON" | head -n1 | sed 's/.*"\(https[^"]*\)"/\1/')"
   if [ -z "$URL" ]; then echo "release has no asset matching *${ASSET}" >&2; exit 1; fi
   say "downloading $(basename "$URL")"
@@ -74,34 +74,34 @@ else
   PKG="$TMP/pkg"
 fi
 
-if [ ! -x "$PKG/bin/mysearch" ] && [ ! -f "$PKG/bin/mysearch" ]; then
-  echo "package does not contain bin/mysearch" >&2
+if [ ! -x "$PKG/bin/samplesearch" ] && [ ! -f "$PKG/bin/samplesearch" ]; then
+  echo "package does not contain bin/samplesearch" >&2
   exit 1
 fi
 
 say "installing to $PREFIX"
 mkdir -p "$PREFIX/bin"
-install -m 0755 "$PKG/bin/mysearch" "$PREFIX/bin/mysearch"
+install -m 0755 "$PKG/bin/samplesearch" "$PREFIX/bin/samplesearch"
 for f in README.md SKILL.md install.ps1 install.sh; do
   [ -f "$PKG/$f" ] && cp "$PKG/$f" "$PREFIX/$f"
 done
 [ -d "$PKG/integrations" ] && cp -R "$PKG/integrations" "$PREFIX/integrations"
-ok "binary: $PREFIX/bin/mysearch"
+ok "binary: $PREFIX/bin/samplesearch"
 
 if [ "$SKIP_SKILL" -eq 0 ] && [ -f "$PREFIX/SKILL.md" ]; then
-  mkdir -p "$HOME/.agents/skills/mysearch"
-  cp "$PREFIX/SKILL.md" "$HOME/.agents/skills/mysearch/SKILL.md"
-  ok "skill: $HOME/.agents/skills/mysearch"
+  mkdir -p "$HOME/.agents/skills/samplesearch"
+  cp "$PREFIX/SKILL.md" "$HOME/.agents/skills/samplesearch/SKILL.md"
+  ok "skill: $HOME/.agents/skills/samplesearch"
   if [ -d "$HOME/.claude" ]; then
-    mkdir -p "$HOME/.claude/skills/mysearch"
-    cp "$PREFIX/SKILL.md" "$HOME/.claude/skills/mysearch/SKILL.md"
-    ok "skill: $HOME/.claude/skills/mysearch"
+    mkdir -p "$HOME/.claude/skills/samplesearch"
+    cp "$PREFIX/SKILL.md" "$HOME/.claude/skills/samplesearch/SKILL.md"
+    ok "skill: $HOME/.claude/skills/samplesearch"
   fi
 fi
 
 if [ "$NO_PATH" -eq 0 ]; then
   if [ -w /usr/local/bin ]; then
-    ln -sf "$PREFIX/bin/mysearch" /usr/local/bin/mysearch 2>/dev/null && ok "linked /usr/local/bin/mysearch"
+    ln -sf "$PREFIX/bin/samplesearch" /usr/local/bin/samplesearch 2>/dev/null && ok "linked /usr/local/bin/samplesearch"
   else
     case ":$PATH:" in
       *":$PREFIX/bin:"*) ok "already on PATH" ;;
@@ -111,14 +111,14 @@ if [ "$NO_PATH" -eq 0 ]; then
 fi
 
 say "verify"
-"$PREFIX/bin/mysearch" health || true
+"$PREFIX/bin/samplesearch" health || true
 
 say "MCP configuration (paste into your client)"
 cat <<JSON
 {
   "mcpServers": {
-    "mysearch": {
-      "command": "$PREFIX/bin/mysearch",
+    "samplesearch": {
+      "command": "$PREFIX/bin/samplesearch",
       "args": ["mcp"]
     }
   }
@@ -126,4 +126,4 @@ cat <<JSON
 JSON
 
 echo
-echo "Done. Try:  $PREFIX/bin/mysearch search \"tokio select usage\" -m 5"
+echo "Done. Try:  $PREFIX/bin/samplesearch search \"tokio select usage\" -m 5"

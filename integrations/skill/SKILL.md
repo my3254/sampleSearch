@@ -1,9 +1,9 @@
 ---
-name: mysearch
+name: samplesearch
 description: Self-hosted web search for AI agents (no paid API key). Use whenever a task needs current web results — news, docs, papers, code, prices, policies — in Chinese or English. Ships as an MCP server, a CLI, and a local HTTP API, all returning the same payload.
 ---
 
-# mysearch
+# samplesearch
 
 A local search service that aggregates free sources (360 primary for Chinese, Bing as fallback) and applies precision filters before ranking. It is **not** a chatbot: it returns ranked `title / url / snippet` records plus a `metadata` block explaining which engines ran and what was filtered.
 
@@ -12,12 +12,12 @@ A local search service that aggregates free sources (360 primary for Chinese, Bi
 1. **MCP tools** — if `search` / `batch_search` / `health` are in your tool list, use them. Preferred: structured input/output, no shell quoting.
 2. **CLI** — if MCP is unavailable but you can run commands:
    ```bash
-   mysearch search "大模型 推理 优化" --max 5
-   mysearch search "600519 财报" -m 3
-   mysearch health
+   samplesearch search "大模型 推理 优化" --max 5
+   samplesearch search "600519 财报" -m 3
+   samplesearch health
    ```
    Output is the same JSON envelope (`code`, `data.results`, `data.metadata`).
-3. **HTTP** — if the service is already running (`mysearch serve`, default `127.0.0.1:8787`):
+3. **HTTP** — if the service is already running (`samplesearch serve`, default `127.0.0.1:8787`):
    ```bash
    curl -s -X POST http://127.0.0.1:8787/v1/search \
      -H 'content-type: application/json' \

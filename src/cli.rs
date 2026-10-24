@@ -2,7 +2,7 @@
 //!
 //! Contract: one binary, three ways in — `serve` (HTTP), `mcp` (stdio JSON-RPC),
 //! and one-shot `search`/`health` (shell). Agents that cannot speak MCP can always
-//! fall back to `mysearch search "..."`, and both paths share the same orchestrator.
+//! fall back to `samplesearch search "..."`, and both paths share the same orchestrator.
 
 use anyhow::bail;
 
@@ -10,15 +10,15 @@ use crate::app;
 use crate::config::Config;
 use crate::model::SearchRequest;
 
-pub const HELP: &str = r#"mysearch — self-hosted search for AI agents
+pub const HELP: &str = r#"samplesearch — self-hosted search for AI agents
 
 USAGE
-  mysearch [serve]                 Start the HTTP API on 127.0.0.1:8787
-  mysearch mcp                     MCP server over stdio (JSON-RPC 2.0)
-  mysearch search "query" [opts]   One-shot search, prints the JSON envelope
-  mysearch health                  Print engine roster as JSON
-  mysearch doc                     Print the agent-facing usage spec
-  mysearch help                    This text
+  samplesearch [serve]                 Start the HTTP API on 127.0.0.1:8787
+  samplesearch mcp                     MCP server over stdio (JSON-RPC 2.0)
+  samplesearch search "query" [opts]   One-shot search, prints the JSON envelope
+  samplesearch health                  Print engine roster as JSON
+  samplesearch doc                     Print the agent-facing usage spec
+  samplesearch help                    This text
 
 SEARCH OPTIONS
   -m, --max <1-10>   max_results (default 10)
@@ -26,13 +26,13 @@ SEARCH OPTIONS
   -h, --help         help
 
 ENV
-  MYSEARCH_BIND, MYSEARCH_TIER_A_TIMEOUT_MS, MYSEARCH_TIER_B_TIMEOUT_MS,
-  MYSEARCH_MAX_UPSTREAM, MYSEARCH_DEFAULT_MAX, MYSEARCH_INTL, MYSEARCH_PROXY
+  SAMPLESEARCH_BIND, SAMPLESEARCH_TIER_A_TIMEOUT_MS, SAMPLESEARCH_TIER_B_TIMEOUT_MS,
+  SAMPLESEARCH_MAX_UPSTREAM, SAMPLESEARCH_DEFAULT_MAX, SAMPLESEARCH_INTL, SAMPLESEARCH_PROXY
 "#;
 
-pub const DOC: &str = r#"# mysearch usage spec (for AI agents)
+pub const DOC: &str = r#"# samplesearch usage spec (for AI agents)
 
-Prefer the MCP tools when the `mysearch` MCP server is configured; otherwise use
+Prefer the MCP tools when the `samplesearch` MCP server is configured; otherwise use
 the CLI. Both return the same data.
 
 ## MCP tools
@@ -41,8 +41,8 @@ the CLI. Both return the same data.
 - health          {}
 
 ## CLI
-  mysearch search "大模型 推理 优化" --max 5
-  mysearch search "600519 财报" -m 3 --explain
+  samplesearch search "大模型 推理 优化" --max 5
+  samplesearch search "600519 财报" -m 3 --explain
 
 Output is the AnySearch-compatible envelope:
   { "code": 0, "data": { "results": [...], "metadata": {...} } }
@@ -90,7 +90,7 @@ pub async fn search(args: &[String]) -> anyhow::Result<()> {
 
     let query = query_parts.join(" ");
     if query.trim().is_empty() {
-        bail!("missing query, e.g. mysearch search \"tokio select 用法\"");
+        bail!("missing query, e.g. samplesearch search \"tokio select 用法\"");
     }
 
     let config = Config::from_env();

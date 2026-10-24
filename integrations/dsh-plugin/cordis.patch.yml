@@ -1,0 +1,14 @@
+# samplesearch — DSH plugin patch layer.
+#
+# This package is both the bundle and the plugin: the patch inserts an entry whose
+# `name` is this package, so DSH imports ./index.js and calls its `apply(ctx)`.
+# No @deepseek-ai/dsh-mcp-client involved — tools are registered natively on ctx.tools,
+# which is why installing this one package is enough.
+#
+# `binary: ''` means "resolve `samplesearch` from PATH" (the installer puts it there).
+- insert:
+    - id: samplesearch
+      name: samplesearch
+      config:
+        binary: ''
+        timeoutMs: 45000

@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(std::io::stderr)
         .with_env_filter(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,mysearch=debug,tower_http=warn")),
+                .unwrap_or_else(|_| EnvFilter::new("info,samplesearch=debug,tower_http=warn")),
         )
         .with_target(false)
         .init();
@@ -71,7 +71,7 @@ async fn serve() -> anyhow::Result<()> {
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    tracing::info!(%addr, "mysearch http listening");
+    tracing::info!(%addr, "samplesearch http listening");
     axum::serve(listener, router)
         .with_graceful_shutdown(shutdown_signal())
         .await?;

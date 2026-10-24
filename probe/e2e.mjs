@@ -1,5 +1,5 @@
 // End-to-end check against the local service (Node fetch works under the sandbox).
-const base = process.env.MYSEARCH_BASE || 'http://127.0.0.1:8787';
+const base = process.env.SAMPLESEARCH_BASE || 'http://127.0.0.1:8787';
 
 async function post(path, body) {
   const t0 = Date.now();

@@ -1,4 +1,4 @@
-# mysearch
+# samplesearch
 
 自托管、零 API 费用的 **AI 搜索聚合服务**：用一个本地二进制，给各种 AI Agent 提供「检索 + 结构化结果」，接口与 [AnySearch](https://www.anysearch.com) 契约同构。
 
@@ -14,14 +14,14 @@
 ```powershell
 $env:CARGO_HOME="$PWD\.cargo-home"
 cargo vendor vendor          # 一次性：把依赖落到 vendor/（需要能访问 crates.io）
-cargo build --release        # 产物：target\release\mysearch.exe
+cargo build --release        # 产物：target\release\samplesearch.exe
 cargo test                   # 29 个单测
 ```
 
 ```powershell
-mysearch serve                                # 127.0.0.1:8787
-mysearch search "大模型 推理 优化" -m 5        # CLI，输出 JSON
-mysearch mcp                                  # MCP stdio server
+samplesearch serve                                # 127.0.0.1:8787
+samplesearch search "大模型 推理 优化" -m 5        # CLI，输出 JSON
+samplesearch mcp                                  # MCP stdio server
 ```
 
 ```bash
@@ -34,12 +34,12 @@ curl -s -X POST http://127.0.0.1:8787/v1/search \
 
 | 入口 | 命令 | 适用 |
 | --- | --- | --- |
-| MCP (stdio) | `mysearch mcp` | Claude Code / Cursor / Windsurf / Codex / DeepSeek Harness |
-| CLI | `mysearch search "…" -m 5` | 任何能执行命令的 agent |
-| HTTP | `mysearch serve` | 多 agent 共享、非 Agent 程序 |
+| MCP (stdio) | `samplesearch mcp` | Claude Code / Cursor / Windsurf / Codex / DeepSeek Harness |
+| CLI | `samplesearch search "…" -m 5` | 任何能执行命令的 agent |
+| HTTP | `samplesearch serve` | 多 agent 共享、非 Agent 程序 |
 
 客户端配置与 Skill 安装见 [integrations/README.md](integrations/README.md)。
-DSH 用户：`integrations/dsh-bundle/` 是一个可直接安装的 profile bundle。
+DSH 用户：`integrations/dsh-plugin/` 是原生插件（直接注册工具，不需要 dsh-mcp-client），`install.ps1 -InstallDshPlugin` 一键装。
 
 ## API
 
@@ -76,7 +76,7 @@ DSH 用户：`integrations/dsh-bundle/` 是一个可直接安装的 profile bund
 
 | 文档 | 内容 |
 | --- | --- |
-| [docs/2026-10-24-mysearch-plan.md](docs/2026-10-24-mysearch-plan.md) | 源可达性实测矩阵、引擎路由、里程碑 |
+| [docs/2026-10-24-samplesearch-plan.md](docs/2026-10-24-samplesearch-plan.md) | 源可达性实测矩阵、引擎路由、里程碑 |
 | [docs/2026-10-24-architecture.md](docs/2026-10-24-architecture.md) | 插件化渠道（L1 声明式 / L2 原生 / L3 外挂）、热加载、打分管线 |
 | [docs/2026-10-24-precision.md](docs/2026-10-24-precision.md) | 精确度手册：过滤链、阈值、实测数字、误删边界 |
 | [integrations/README.md](integrations/README.md) | MCP / CLI / HTTP / Skill / DSH 安装 |

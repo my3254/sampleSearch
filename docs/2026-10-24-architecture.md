@@ -1,8 +1,8 @@
-# mysearch 架构设计：可插拔渠道 + 可扩展打分
+# samplesearch 架构设计：可插拔渠道 + 可扩展打分
 
 - 版本：v1.0（架构基线）
 - 日期：2026-10-24
-- 关联：[实施计划](2026-10-24-mysearch-plan.md)、[AGENTS.md](../AGENTS.md)
+- 关联：[实施计划](2026-10-24-samplesearch-plan.md)、[AGENTS.md](../AGENTS.md)
 - 目标：**新增搜索渠道不改核心代码、不重启进程；打分/排序可换、可调、可解释、可测**
 
 ---
@@ -320,8 +320,8 @@ pub trait Diversifier: Send + Sync {
 ### 5.5 校准（把权重调好，而不是拍脑袋）
 
 ```powershell
-mysearch eval --set tests/eval/queries.json --grid 0.2        # 粗网格搜索权重
-mysearch eval --set tests/eval/queries.json --compare baseline.json
+samplesearch eval --set tests/eval/queries.json --grid 0.2        # 粗网格搜索权重
+samplesearch eval --set tests/eval/queries.json --compare baseline.json
 ```
 
 输出：top1/top3 命中率、MRR、平均延迟、平均上游请求数、degraded 率。调参依据是数字，不是手感。
@@ -391,7 +391,7 @@ tests/
 | 结构断言 | 解析结果数 ≥ `assert.min_items`，字段缺失率 ≤ 阈值 | 离线 |
 | 打分金测 | `tests/golden/ranking_*.json`：固定候选集 + profile → 断言顺序 | 离线，CI |
 | 热加载 | 改配置 → reload → 断言 revision+1 且新渠道可命中；坏配置 → 断言保留旧版本 | 离线 |
-| 实网体检 | `mysearch engine check <id> [--spec x.json]`：字段覆盖率、条数、延迟、闸门结果 | 手动 |
+| 实网体检 | `samplesearch engine check <id> [--spec x.json]`：字段覆盖率、条数、延迟、闸门结果 | 手动 |
 | 外挂契约 | `POST /admin/conformance`：10 条固定查询，校验 schema/超时/错误语义 | 手动/CI（mock） |
 
 `engine check` 是新渠道的准入门槛：覆盖率不到 90% 或经常 0 条，就先别进配置。

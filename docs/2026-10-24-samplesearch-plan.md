@@ -1,8 +1,8 @@
-# mysearch：自建 AI 搜索基础设施 — 实施计划
+# samplesearch：自建 AI 搜索基础设施 — 实施计划
 
 - 版本：v0.4（新增：引擎路由策略、反爬边界、海外源开关；据实测调整主引擎）
 - 日期：2026-10-24
-- 工作区：`D:\software\idea\mysearch`
+- 工作区：`D:\software\idea\samplesearch`
 - 环境：Windows / rustc 1.98.0 / Node v22.22.2 / DSH 沙箱 workspace-write
 
 ---
@@ -126,7 +126,7 @@
 ### 3.3 依赖与 TLS
 
 ```powershell
-$env:CARGO_HOME='D:\software\idea\mysearch\.cargo-home'
+$env:CARGO_HOME='$env:CARGO_HOME="$PWD\.cargo-home"'
 cargo vendor vendor      # 完全权限下执行一次
 cargo build --offline    # 之后沙箱内可重复
 ```

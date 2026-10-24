@@ -1,5 +1,5 @@
 // Check crates.io reachability + availability/versions of the crates a Rust port would need.
-const UA = 'mysearch-probe/0.1 (local feasibility check)';
+const UA = 'samplesearch-probe/0.1 (local feasibility check)';
 const crates = [
   'axum', 'tokio', 'reqwest', 'serde', 'serde_json', 'scraper', 'readability',
   'html2md', 'htmd', 'moka', 'governor', 'rusqlite', 'sqlx', 'rmcp', 'tower-http',

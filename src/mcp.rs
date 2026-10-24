@@ -61,7 +61,7 @@ async fn handle(line: &str, state: &Arc<AppState>) -> Option<Value> {
                 json!({
                     "protocolVersion": version,
                     "capabilities": { "tools": { "listChanged": false } },
-                    "serverInfo": { "name": "mysearch", "version": env!("CARGO_PKG_VERSION") },
+                    "serverInfo": { "name": "samplesearch", "version": env!("CARGO_PKG_VERSION") },
                     "instructions": "Self-hosted search. Use `search` with natural language; results include url+snippet and a metadata block explaining engine routing and filtering."
                 }),
             ))
@@ -86,7 +86,7 @@ fn tool_defs() -> Value {
     json!([
         {
             "name": "search",
-            "description": "Search the web through the self-hosted mysearch service. Returns ranked results with title, url and snippet, plus metadata describing which engines ran and why results were filtered.",
+            "description": "Search the web through the self-hosted samplesearch service. Returns ranked results with title, url and snippet, plus metadata describing which engines ran and why results were filtered.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

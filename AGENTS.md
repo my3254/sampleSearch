@@ -1,4 +1,4 @@
-# AGENTS.md — mysearch
+# AGENTS.md — samplesearch
 
 **当前状态**：**M0 + 接入层已落地并验证（2026-10-24）**——可编译、可运行、可搜索；**同一二进制三种入口**：`serve`（HTTP）/ `mcp`（stdio MCP server）/ `search|health|doc`（CLI）。M1（路由表 + L1 声明式渠道 + 热加载）待做。
 
@@ -10,22 +10,22 @@
 
 **已确认决策**：纯自用 · 本机 Windows · HTTP API + MCP 同交付 · **Rust** · **不接任何需要反爬的源** · **海外源默认关闭、一个开关打开** · **不"都搜一遍"（1 主 + ≤2 附加 + 不足才兜底，上限 4 请求）**。
 
-**完整设计**：[实施计划](docs/2026-10-24-mysearch-plan.md)（源矩阵、路由、里程碑） + [架构设计](docs/2026-10-24-architecture.md)（插件化渠道、热加载、打分体系） + [精度手册](docs/2026-10-24-precision.md)（过滤链、概念匹配、实测数字）。
+**完整设计**：[实施计划](docs/2026-10-24-samplesearch-plan.md)（源矩阵、路由、里程碑） + [架构设计](docs/2026-10-24-architecture.md)（插件化渠道、热加载、打分体系） + [精度手册](docs/2026-10-24-precision.md)（过滤链、概念匹配、实测数字）。
 
 ## Agent 接入（三种入口，共用同一核心）
 
 | 入口 | 命令 | 适用 | 常驻 |
 | --- | --- | --- | --- |
-| MCP (stdio) | `mysearch mcp` | Claude Code / Cursor / Windsurf / Codex / DSH 等 MCP 客户端 | 否（客户端拉起） |
-| CLI | `mysearch search "…" -m 5` | 任何能执行命令的 agent | 否 |
-| HTTP | `mysearch serve` | 多 agent 共享 / 非 Agent 程序 | 是 |
+| MCP (stdio) | `samplesearch mcp` | Claude Code / Cursor / Windsurf / Codex / DSH 等 MCP 客户端 | 否（客户端拉起） |
+| CLI | `samplesearch search "…" -m 5` | 任何能执行命令的 agent | 否 |
+| HTTP | `samplesearch serve` | 多 agent 共享 / 非 Agent 程序 | 是 |
 
 三个入口都直接调用 `Orchestrator::search`，**行为一致**：CLI 与 HTTP 返回同一个 AnySearch 信封，MCP 额外给 markdown + `structuredContent`。
 
 - MCP 工具：`search`（query / max_results / explain）、`batch_search`（1–5 条）、`health`。
 - 协议版本协商支持 `2024-11-05` / `2025-03-26` / `2025-06-18`；日志一律走 stderr，stdout 只放 JSON-RPC。
 - 各客户端配置片段、Skill 安装位置见 [integrations/README.md](integrations/README.md)；给 agent 读的说明书是 [integrations/skill/SKILL.md](integrations/skill/SKILL.md)。
-- 验证 MCP：`Get-Content integrations\mcp-session.jsonl | .\target\release\mysearch.exe mcp`
+- 验证 MCP：`Get-Content integrations\mcp-session.jsonl | .\target\release\samplesearch.exe mcp`
 
 ## 扩展方式（加渠道/调权重前先看这里）
 
@@ -44,9 +44,9 @@
 ## 项目结构
 
 ```
-mysearch/
+samplesearch/
 ├─ AGENTS.md
-├─ docs/2026-10-24-mysearch-plan.md   实施计划 v0.4
+├─ docs/2026-10-24-samplesearch-plan.md   实施计划 v0.4
 ├─ docs/2026-10-24-architecture.md    架构基线：插件化渠道 / 热加载 / 打分体系
 └─ probe/                             Node ESM 探针（沙箱内唯一可靠出网通道）
    ├─ endpoints.mjs   15 个通用/海外源可达性
@@ -121,7 +121,7 @@ M1 计划新增：`core/router.rs`（routing.json）、`engines/{declarative,ext
 依赖已 `cargo vendor` 到 `vendor/`（206 个 crate），`.cargo/config.toml` 做了 source replacement + `offline = true`。**必须把 `CARGO_HOME` 指到工作区内**（`~/.cargo` 在沙箱中只读）：
 
 ```powershell
-$env:CARGO_HOME='D:\software\idea\mysearch\.cargo-home'
+$env:CARGO_HOME="$PWD\.cargo-home"
 cargo build          # ~3s（改代码后增量）
 cargo test           # 29 个单测，全绿
 cargo run            # 服务监听 127.0.0.1:8787
@@ -138,7 +138,7 @@ node probe\e2e.mjs   # /health + 3 条真实查询 + 参数校验
 curl.exe -s -X POST http://127.0.0.1:8787/v1/search -H "content-type: application/json" -d "{\"query\":\"大模型 推理 优化\",\"max_results\":5}"
 ```
 
-环境变量：`MYSEARCH_BIND`、`MYSEARCH_TIER_A_TIMEOUT_MS`、`MYSEARCH_TIER_B_TIMEOUT_MS`、`MYSEARCH_MAX_UPSTREAM`、`MYSEARCH_DEFAULT_MAX`、`MYSEARCH_INTL`（默认 0）、`MYSEARCH_PROXY`。
+环境变量：`SAMPLESEARCH_BIND`、`SAMPLESEARCH_TIER_A_TIMEOUT_MS`、`SAMPLESEARCH_TIER_B_TIMEOUT_MS`、`SAMPLESEARCH_MAX_UPSTREAM`、`SAMPLESEARCH_DEFAULT_MAX`、`SAMPLESEARCH_INTL`（默认 0）、`SAMPLESEARCH_PROXY`。
 
 ### 已实现（M0）
 
@@ -157,9 +157,9 @@ curl.exe -s -X POST http://127.0.0.1:8787/v1/search -H "content-type: applicatio
 2. `~/.rustup`、`~/.cargo` 在工作区内**只读**；`CARGO_HOME` 必须指向工作区内（`.cargo-home`），并用 `vendor/` + `--offline` 构建。
 3. **HTTP 客户端必须用 rustls，禁止 native-tls**：reqwest 0.13 的写法是 `default-features = false, features = ["rustls-no-provider", ...]`，并在 `main` 里先调用 `rustls::crypto::ring::default_provider().install_default()`；`rustls` 依赖 **必须用 ring**（`default-features=false, features=["ring","std","tls12"]`），不能用默认的 aws-lc-rs（本机无 C 工具链）。
 4. 上游限流必须尊重：GitHub 未登录 10 req/min；bing 5 req/s、hn 1 req/s、arxiv 1 req/3s。
-5. 测试不打真网：新增引擎必须带 `tests/fixtures/` 录制样本；新增渠道先跑 `mysearch engine check <id>`，字段覆盖率 <90% 或频繁 0 条不要入库。
+5. 测试不打真网：新增引擎必须带 `tests/fixtures/` 录制样本；新增渠道先跑 `samplesearch engine check <id>`，字段覆盖率 <90% 或频繁 0 条不要入库。
 6. **新渠道优先写 L1 声明式 spec**（`config/engines/*.json`），只有 GBK/签名/多步请求才写 L2；配置里的 `meta.hosts` 是硬白名单，不得绕过。
-7. **调打分权重必须用 `mysearch eval` 给前后对比**，禁止手调后不做回归；`tests/golden/ranking_*.json` 是排序契约，改动需说明原因。
+7. **调打分权重必须用 `samplesearch eval` 给前后对比**，禁止手调后不做回归；`tests/golden/ranking_*.json` 是排序契约，改动需说明原因。
 8. `/admin/*` 默认仅回环可访问，不得暴露到公网；外挂渠道默认只允许 `127.0.0.1`。
 9. 合规边界：个人自用、不公开、不商用、低频；只缓存结果元数据与短摘要，不缓存全文；结果一律附来源链接。
 10. 中文网页注意编码：腾讯行情等为 GBK，用 `encoding_rs` 解码；其余按 `content-type` 判断。

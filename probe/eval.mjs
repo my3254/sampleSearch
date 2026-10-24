@@ -1,7 +1,7 @@
 // Precision@5 harness: does the top-5 actually answer the query?
 // A result counts as relevant when its title contains any expected keyword.
 // Crude proxy, but stable and reproducible — good enough to compare filter changes.
-const base = process.env.MYSEARCH_BASE || 'http://127.0.0.1:8787';
+const base = process.env.SAMPLESEARCH_BASE || 'http://127.0.0.1:8787';
 
 const cases = [
   { q: '大模型 推理 优化', expect: ['推理', '优化'], forbid: ['汉语', '汉典', '部首', '翻译'] },

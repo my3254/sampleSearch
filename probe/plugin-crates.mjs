@@ -1,5 +1,5 @@
 // Versions for the plugin/scoring architecture crates.
-const UA = 'mysearch-probe/0.1';
+const UA = 'samplesearch-probe/0.1';
 const crates = [
   'async-trait', 'arc-swap', 'notify', 'jmespath', 'jsonpath-rust', 'serde_json_path',
   'jsonschema', 'moka', 'redb', 'governor', 'rmcp', 'tower', 'tower-http', 'axum',

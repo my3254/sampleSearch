@@ -1,26 +1,26 @@
 <#
 .SYNOPSIS
-  Install mysearch (self-hosted search for AI agents) on Windows.
+  Install samplesearch (self-hosted search for AI agents) on Windows.
 
 .DESCRIPTION
-  Downloads the release binary, installs it under %LOCALAPPDATA%\Programs\mysearch,
-  adds it to the user PATH, installs the agent skill into ~/.agents/skills/mysearch
+  Downloads the release binary, installs it under %LOCALAPPDATA%\Programs\samplesearch,
+  adds it to the user PATH, installs the agent skill into ~/.agents/skills/samplesearch
   (and ~/.claude/skills when present), and prints the MCP configuration.
 
   One-liner:
     irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
 
-  With DeepSeek Harness registration:
-    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1))) -InstallDshBundle
+  With DeepSeek Harness registration (native plugin, no MCP bridge needed):
+    & ([scriptblock]::Create((irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1))) -InstallDshPlugin
 
   Offline / from an extracted release directory (also used by the tests):
-    .\install.ps1 -FromLocal C:\path\to\mysearch-v0.1.0-win-x64 -SkipPath
+    .\install.ps1 -FromLocal C:\path\to\samplesearch-v0.1.0-win-x64 -SkipPath
 
 .PARAMETER Version
   Release tag to install, or "latest".
 
 .PARAMETER Prefix
-  Install root. Defaults to %LOCALAPPDATA%\Programs\mysearch.
+  Install root. Defaults to %LOCALAPPDATA%\Programs\samplesearch.
 
 .PARAMETER FromLocal
   Install from an already-extracted release directory instead of downloading.
@@ -31,18 +31,19 @@
 .PARAMETER SkipSkill
   Do not install the agent skill.
 
-.PARAMETER InstallDshBundle
-  Register the bundled MCP client patch with DeepSeek Harness (desktop profile).
+.PARAMETER InstallDshPlugin
+  Register the native DeepSeek Harness plugin (desktop profile). This is a single
+  self-contained package — it does not install or need dsh-mcp-client.
 #>
 [CmdletBinding()]
 param(
   [string]$Version = 'latest',
-  [string]$Prefix = (Join-Path $env:LOCALAPPDATA 'Programs\mysearch'),
+  [string]$Prefix = (Join-Path $env:LOCALAPPDATA 'Programs\samplesearch'),
   [string]$FromLocal,
   [string]$Repo = 'my3254/sampleSearch',
   [switch]$SkipPath,
   [switch]$SkipSkill,
-  [switch]$InstallDshBundle
+  [switch]$InstallDshPlugin
 )
 
 $ErrorActionPreference = 'Stop'
@@ -52,7 +53,7 @@ function Write-Step($msg) { Write-Host "==> $msg" -ForegroundColor Cyan }
 function Write-Ok($msg) { Write-Host "    $msg" -ForegroundColor Green }
 
 $asset = 'win-x64.zip'
-$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("mysearch-install-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) ("samplesearch-install-" + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Path $tmp -Force | Out-Null
 
 try {
@@ -69,7 +70,7 @@ try {
       "https://api.github.com/repos/$Repo/releases/tags/$Version"
     }
     Write-Step "resolving release ($Version)"
-    $release = Invoke-RestMethod -Uri $api -Headers @{ 'user-agent' = 'mysearch-installer' }
+    $release = Invoke-RestMethod -Uri $api -Headers @{ 'user-agent' = 'samplesearch-installer' }
     $file = $release.assets | Where-Object { $_.name -like "*$asset" } | Select-Object -First 1
     if (-not $file) { throw "release $($release.tag_name) has no asset matching *$asset" }
 
@@ -87,19 +88,19 @@ try {
 
     Expand-Archive -Path $zip -DestinationPath (Join-Path $tmp 'pkg') -Force
     $pkgRoot = Join-Path $tmp 'pkg'
-    if (-not (Test-Path (Join-Path $pkgRoot 'bin\mysearch.exe'))) {
+    if (-not (Test-Path (Join-Path $pkgRoot 'bin\samplesearch.exe'))) {
       $nested = Get-ChildItem $pkgRoot -Directory | Select-Object -First 1
       if ($nested) { $pkgRoot = $nested.FullName }
     }
   }
 
-  $exe = Join-Path $pkgRoot 'bin\mysearch.exe'
-  if (-not (Test-Path $exe)) { throw "package does not contain bin\mysearch.exe" }
+  $exe = Join-Path $pkgRoot 'bin\samplesearch.exe'
+  if (-not (Test-Path $exe)) { throw "package does not contain bin\samplesearch.exe" }
 
   Write-Step "installing to $Prefix"
   $binDir = Join-Path $Prefix 'bin'
   New-Item -ItemType Directory -Path $binDir -Force | Out-Null
-  Copy-Item $exe (Join-Path $binDir 'mysearch.exe') -Force
+  Copy-Item $exe (Join-Path $binDir 'samplesearch.exe') -Force
   foreach ($item in 'README.md', 'SKILL.md', 'install.ps1', 'install.sh') {
     $src = Join-Path $pkgRoot $item
     if (Test-Path $src) { Copy-Item $src (Join-Path $Prefix $item) -Force }
@@ -107,7 +108,7 @@ try {
   if (Test-Path (Join-Path $pkgRoot 'integrations')) {
     Copy-Item (Join-Path $pkgRoot 'integrations') (Join-Path $Prefix 'integrations') -Recurse -Force
   }
-  Write-Ok "binary: $(Join-Path $binDir 'mysearch.exe')"
+  Write-Ok "binary: $(Join-Path $binDir 'samplesearch.exe')"
 
   if (-not $SkipPath) {
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -123,7 +124,7 @@ try {
   if (-not $SkipSkill) {
     $skillSrc = Join-Path $Prefix 'SKILL.md'
     if (Test-Path $skillSrc) {
-      foreach ($dir in (Join-Path $HOME '.agents\skills\mysearch'), (Join-Path $HOME '.claude\skills\mysearch')) {
+      foreach ($dir in (Join-Path $HOME '.agents\skills\samplesearch'), (Join-Path $HOME '.claude\skills\samplesearch')) {
         if ($dir -like '*\.claude\*' -and -not (Test-Path (Join-Path $HOME '.claude'))) { continue }
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
         Copy-Item $skillSrc (Join-Path $dir 'SKILL.md') -Force
@@ -132,35 +133,37 @@ try {
     }
   }
 
-  if ($InstallDshBundle) {
+  if ($InstallDshPlugin) {
     $dsh = Get-Command dsh.cmd -ErrorAction SilentlyContinue
     if (-not $dsh) { $dsh = Get-Command dsh -ErrorAction SilentlyContinue }
-    $bundle = Join-Path $Prefix 'integrations\dsh-bundle'
+    $plugin = Join-Path $Prefix 'integrations\dsh-plugin'
     if (-not $dsh) {
       Write-Host "    ! dsh not found on PATH — skipped DeepSeek Harness registration" -ForegroundColor Yellow
     }
-    elseif (-not (Test-Path $bundle)) {
-      Write-Host "    ! bundle missing from package at $bundle" -ForegroundColor Yellow
+    elseif (-not (Test-Path $plugin)) {
+      Write-Host "    ! plugin missing from package at $plugin" -ForegroundColor Yellow
     }
     else {
-      $patch = Join-Path $bundle 'cordis.patch.yml'
+      # The plugin shells out to the binary; point it at this installation explicitly
+      # instead of relying on PATH having been refreshed in the running DSH process.
+      $patch = Join-Path $plugin 'cordis.patch.yml'
       $text = Get-Content $patch -Raw
-      $text = $text -replace "(?m)^(\s*)command: '.*'$", "`$1command: '$(Join-Path $binDir 'mysearch.exe')'"
+      $text = $text -replace "(?m)^(\s*)binary: ''\s*$", "`$1binary: '$(Join-Path $binDir 'samplesearch.exe')'"
       Set-Content -Path $patch -Value $text -Encoding utf8NoBOM
-      & $dsh.Source plugin --profile desktop add "file:$bundle" | Out-Host
+      & $dsh.Source plugin --profile desktop add "file:$plugin" | Out-Host
       Write-Ok "registered with DeepSeek Harness — restart DSH, then start a new conversation"
     }
   }
 
   Write-Step "verify"
-  & (Join-Path $binDir 'mysearch.exe') health | Out-Host
+  & (Join-Path $binDir 'samplesearch.exe') health | Out-Host
 
   Write-Step "MCP configuration (paste into your client)"
   Write-Host @"
 {
   "mcpServers": {
-    "mysearch": {
-      "command": "$((Join-Path $binDir 'mysearch.exe') -replace '\\','\\')",
+    "samplesearch": {
+      "command": "$((Join-Path $binDir 'samplesearch.exe') -replace '\\','\\')",
       "args": ["mcp"]
     }
   }
@@ -168,7 +171,7 @@ try {
 "@ -ForegroundColor DarkGray
 
   Write-Host ""
-  Write-Host "Done. Try:  mysearch search `"大模型 推理 优化`" -m 5" -ForegroundColor Green
+  Write-Host "Done. Try:  samplesearch search `"大模型 推理 优化`" -m 5" -ForegroundColor Green
 }
 finally {
   Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue

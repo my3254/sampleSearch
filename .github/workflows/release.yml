@@ -42,12 +42,12 @@ jobs:
         run: |
           set -euo pipefail
           VER="${GITHUB_REF_NAME:-dev}"
-          OUT="dist/mysearch-${VER}-${{ matrix.asset }}"
+          OUT="dist/samplesearch-${VER}-${{ matrix.asset }}"
           mkdir -p dist pkg/bin
           if [[ "${{ matrix.asset }}" == *.zip ]]; then
-            cp "target/${{ matrix.target }}/release/mysearch.exe" pkg/bin/
+            cp "target/${{ matrix.target }}/release/samplesearch.exe" pkg/bin/
           else
-            cp "target/${{ matrix.target }}/release/mysearch" pkg/bin/
+            cp "target/${{ matrix.target }}/release/samplesearch" pkg/bin/
           fi
           cp README.md pkg/
           cp integrations/skill/SKILL.md pkg/SKILL.md
@@ -96,4 +96,4 @@ jobs:
             ```
 
             The installer drops the binary into a per-user directory, adds it to `PATH`, installs the agent skill,
-            and prints the MCP config. `-InstallDshBundle` (PowerShell) also registers it in DeepSeek Harness.
+            and prints the MCP config. `-InstallDshPlugin` (PowerShell) also registers the native DeepSeek Harness plugin — no MCP bridge needed.

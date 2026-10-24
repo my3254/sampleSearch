@@ -1,5 +1,5 @@
 [package]
-name = "mysearch"
+name = "samplesearch"
 version = "0.1.0"
 edition = "2021"
 description = "Self-hosted, zero-cost search aggregation API for AI agents (AnySearch-compatible contract)"
