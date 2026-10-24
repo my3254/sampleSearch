@@ -1,0 +1,21 @@
+{
+  "name": "dsh-mysearch-bundle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DSH profile bundle that mounts the mysearch MCP server (@deepseek-ai/dsh-mcp-client)",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

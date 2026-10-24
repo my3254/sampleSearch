@@ -1,0 +1,15 @@
+# build artifacts
+/target
+/vendor-setup.log
+/*.log
+
+# offline dependency snapshot (187MB) — recreate with `cargo vendor vendor`
+/vendor
+/.cargo-home
+
+# local agent skill copies
+/.skills
+
+# backups created during local installs
+*.bak
+*.bak2

@@ -1,0 +1,18 @@
+# Patch layer of the dsh-mysearch-bundle.
+#
+# DSH applies a patch list to the composed entry tree (see the loader's
+# applyEntryPatches):
+#   - a patch WITH `id` overrides that existing entry, and warns if it is missing;
+#   - a patch WITH `insert` appends new entries — at the top level when it has no `id`.
+# A *new* plugin therefore has to arrive through `insert`. That is exactly our case:
+# @deepseek-ai/dsh-mcp-client is a plugin package, not a profile bundle.
+- insert:
+    - id: mysearch-mcp
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: mysearch
+        transport: stdio
+        command: 'D:\software\idea\mysearch\target\release\mysearch.exe'
+        args: ['mcp']
+        env:
+          RUST_LOG: warn

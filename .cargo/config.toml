@@ -1,0 +1,11 @@
+# Dependencies are vendored (see /vendor) because cargo cannot reach crates.io
+# under the sandboxed token (schannel: SEC_E_NO_CREDENTIALS). Build with:
+#   $env:CARGO_HOME='<repo>/.cargo-home'; cargo build --offline
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
+
+[net]
+offline = true
