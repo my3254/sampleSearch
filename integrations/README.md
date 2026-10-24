@@ -193,3 +193,20 @@ dsh --profile mcpcheck --dump-config | Select-String -Pattern 'samplesearch|patc
 | **skill + MCP + CLI（本方案）** | 两者并集 | 需要维护两个薄壳——但它们共用同一个 `Orchestrator`，薄壳各约 200 行 |
 
 关键前提是**三个入口共用一套核心**：CLI 与 MCP 都直接调用 `Orchestrator::search`，HTTP 层只是再包一层。所以不存在"三个实现、三份行为不一致"的问题。
+### 更新
+
+```powershell
+# 只更新二进制（覆盖安装目录里的 exe）
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1))) -InstallDshPlugin
+
+# 顺带重启 DSH，装完即生效（会关闭当前 DSH 窗口，会话可恢复）
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1))) -InstallDshPlugin -RestartDsh
+```
+
+三种更新范围对应的动作：
+
+| 改动范围 | 动作 |
+| --- | --- |
+| 只有 `samplesearch.exe` | 重装二进制；CLI/MCP/HTTP 用新文件，DSH 插件下一次调用即生效（不必重启） |
+| 插件代码（`integrations/dsh-plugin/*`） | `dsh plugin remove` → `add` → 重启 DSH（pnpm 对 `file:` 是复制，覆盖源码无效） |
+| 仅 Skill 文案 | 覆盖 `~\.agents\skills\samplesearch\SKILL.md`，新会话生效 |

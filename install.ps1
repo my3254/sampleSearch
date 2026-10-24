@@ -34,6 +34,12 @@
 .PARAMETER InstallDshPlugin
   Register the native DeepSeek Harness plugin (desktop profile). This is a single
   self-contained package — it does not install or need dsh-mcp-client.
+
+.PARAMETER RestartDsh
+  After installing, close and relaunch DeepSeek Harness so the plugin layer loads.
+  Run this from a terminal outside DSH: it ends the current DSH session window
+  (the conversation is kept and can be resumed). Without this switch you restart
+  DSH yourself.
 #>
 [CmdletBinding()]
 param(
@@ -43,7 +49,8 @@ param(
   [string]$Repo = 'my3254/sampleSearch',
   [switch]$SkipPath,
   [switch]$SkipSkill,
-  [switch]$InstallDshPlugin
+  [switch]$InstallDshPlugin,
+  [switch]$RestartDsh
 )
 
 $ErrorActionPreference = 'Stop'
@@ -170,6 +177,26 @@ try {
       [System.IO.File]::WriteAllText($patch, $text, (New-Object System.Text.UTF8Encoding($false)))
       & $dsh.Source plugin --profile desktop add "file:$plugin" | Out-Host
       Write-Ok "registered with DeepSeek Harness — restart DSH, then start a new conversation"
+    }
+  }
+
+  if ($RestartDsh) {
+    Write-Step "restarting DeepSeek Harness"
+    $running = Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue
+    if (-not $running) {
+      Write-Host "    ! DeepSeek Harness is not running; start it yourself" -ForegroundColor Yellow
+    }
+    else {
+      $exePath = ($running | Where-Object { $_.Path } | Select-Object -First 1).Path
+      if (-not $exePath) { $exePath = 'D:\software\deepseek\DeepSeek Harness.exe' }
+      # Graceful first so the harness can flush session state, force after 8 s.
+      $running | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+      Start-Sleep -Seconds 2
+      Get-Process -Name 'DeepSeek Harness' -ErrorAction SilentlyContinue | Stop-Process -Force
+      Start-Sleep -Milliseconds 700
+      Start-Process -FilePath $exePath
+      Write-Ok "restarted: $exePath"
+      Write-Host "    give it ~10 s, then open a new conversation" -ForegroundColor DarkGray
     }
   }
 
