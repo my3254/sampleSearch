@@ -15,7 +15,7 @@ Most "AI search" products are a hosted index with a per-query price. samplesearc
 - **Precision before recall.** Query terms are matched as concepts, not as character fragments; seven filters remove aggregator pages, site homepages, entity-only titles and unrelated hits before scoring. Results that would be filler are dropped, and `metadata.filters` reports what was dropped and why.
 - **Rust, single file.** ~6 MB release binary, no runtime, no resident sidecar beyond the one process.
 
-Status: v0.1.0. General web search, filtering, caching and all three transports are implemented and tested against live upstreams. Vertical domains and declarative engine configuration are next (see [Roadmap](#roadmap)).
+Status: v0.1.0. Nine engines, filtering, caching and all three transports are implemented and tested against live upstreams.
 
 ## Install
 
@@ -149,12 +149,6 @@ Per-client snippets: [integrations/README.md](integrations/README.md).
 | [docs/2026-10-24-precision.md](docs/2026-10-24-precision.md) | Filter chain, thresholds, measured numbers, known false drops |
 | [docs/2026-10-24-samplesearch-plan.md](docs/2026-10-24-samplesearch-plan.md) | Source reachability matrix, routing rules, milestones |
 
-## Roadmap
-
-- **v0.1 (current)** — nine engines: general web plus seven official APIs; per-engine token buckets sized from measured quotas; intent routing; engine quota visible in `/health`
-- **v0.2** — declarative engine specs (`config/engines/*.json`) with hot reload; `/v1/sub-domains` and `/v1/extract`
-- **v0.3** — optional keyed providers behind config; weight calibration driven by the evaluation set
-
 ## License
 
 MIT
@@ -174,7 +168,7 @@ MIT
 - **精度优先于召回**：查询词按"概念"匹配而非字符片段；七道过滤器在打分前剔除聚合页、站点首页、纯实体标题与无关命中。被丢弃的结果会带原因回报在 `metadata.filters` 里。
 - **Rust 单文件**：release 约 6 MB，无运行时依赖。
 
-当前版本 v0.1.0：通用网页搜索、过滤、缓存与三种入口均已实现并对真实上游验证。垂直域与声明式渠道配置在后续版本（见路线图）。
+当前版本 v0.1.0：九个引擎、过滤、缓存与三种入口均已实现，并对真实上游验证。
 
 ### 安装
 
@@ -252,12 +246,6 @@ MCP 客户端配置：
 | `SAMPLESEARCH_GITHUB_TOKEN` | — | 把 GitHub 搜索配额从 10 次/分提到 30 次/分 |
 | `SAMPLESEARCH_SE_KEY` | — | 把 Stack Exchange 配额从 300 次/天提到 10,000 次/天 |
 | `SAMPLESEARCH_CONTACT` | — | 作为 `mailto` 发给 Crossref（polite pool） |
-
-### 路线图
-
-- **v0.1（当前）**：九个引擎（通用网页 + 七个官方 API）、按实测配额设定的每引擎令牌桶、意图路由、`/health` 暴露各引擎剩余额度
-- **v0.2**：声明式渠道配置（`config/engines/*.json`）与热加载；`/v1/sub-domains`、`/v1/extract`
-- **v0.3**：可选的付费 provider；用评测集校准打分权重
 
 ### 许可
 
