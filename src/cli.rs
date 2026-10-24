@@ -129,7 +129,11 @@ pub async fn health() -> anyhow::Result<()> {
     println!("{}", serde_json::to_string_pretty(&serde_json::json!({
         "ok": true,
         "version": env!("CARGO_PKG_VERSION"),
-        "engines": orchestrator.engine_ids(),
+        "engines": orchestrator
+            .quota_snapshot()
+            .into_iter()
+            .map(|(id, tokens)| serde_json::json!({ "name": id, "tokens_left": tokens }))
+            .collect::<Vec<_>>(),
         "intl_enabled": config.intl_enabled,
         "upstream_request_cap": config.max_upstream_requests,
         "bind": config.bind,
