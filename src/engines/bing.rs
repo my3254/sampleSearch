@@ -203,7 +203,7 @@ fn unescape(s: &str) -> String {
 
 fn map_reqwest(e: reqwest::Error) -> EngineError {
     if e.is_timeout() {
-        EngineError::Timeout(Duration::from_millis(0))
+        EngineError::Timeout
     } else {
         EngineError::Network(e.to_string())
     }

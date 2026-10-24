@@ -30,8 +30,8 @@ pub struct EngineOutput {
 
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
-    #[error("timeout after {0:?}")]
-    Timeout(Duration),
+    #[error("timeout")]
+    Timeout,
     #[error("upstream status {0}")]
     Upstream(u16),
     #[error("parse failure: {0}")]
@@ -67,7 +67,9 @@ pub trait Engine: Send + Sync {
 pub fn build_client(config: &Config) -> anyhow::Result<reqwest::Client> {
     let mut builder = reqwest::Client::builder()
         .user_agent(UA)
-        .timeout(config.tier_b_timeout + Duration::from_secs(3))
+        // Ceiling only: each call passes its own per-request timeout. A degraded
+        // upstream can legitimately take >5 s, so the client must not cut first.
+        .timeout(Duration::from_secs(20))
         .redirect(reqwest::redirect::Policy::limited(3))
         .gzip(true);
     if let Some(proxy) = &config.proxy {

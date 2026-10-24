@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use tokio::task::JoinSet;
@@ -13,10 +13,21 @@ use crate::model::{
 
 /// Per-host cap so one site cannot fill the whole page.
 const MAX_PER_DOMAIN: usize = 3;
+/// Identical queries are served from memory: repeat traffic must not cost upstream quota.
+const CACHE_TTL: Duration = Duration::from_secs(300);
+const CACHE_MAX: usize = 256;
+/// After a captcha/block response, stop calling that engine for a while.
+const COOLDOWN_AFTER_BLOCK: Duration = Duration::from_secs(600);
+/// When only one engine is healthy, it gets the whole budget — a slow but working
+/// engine is better than a fast timeout that returns nothing.
+const LONE_ENGINE_BUDGET: Duration = Duration::from_secs(12);
 
 pub struct Orchestrator {
     config: Config,
     engines: Vec<Arc<dyn Engine>>,
+    cache: Mutex<HashMap<String, (Instant, SearchData)>>,
+    /// engine id → instant until which it is skipped (captcha / rate-limit backoff).
+    cooldowns: Mutex<HashMap<&'static str, Instant>>,
 }
 
 pub struct Plan {
@@ -34,7 +45,70 @@ struct EngineRun {
 
 impl Orchestrator {
     pub fn new(config: Config, engines: Vec<Arc<dyn Engine>>) -> Self {
-        Self { config, engines }
+        Self {
+            config,
+            engines,
+            cache: Mutex::new(HashMap::new()),
+            cooldowns: Mutex::new(HashMap::new()),
+        }
+    }
+
+    fn cache_key(req: &SearchRequest, max_results: usize) -> String {
+        format!(
+            "{}|{}|{}|{}",
+            req.query.trim().to_lowercase(),
+            max_results,
+            req.domain.as_deref().unwrap_or(""),
+            req.language.as_deref().unwrap_or("")
+        )
+    }
+
+    fn cache_get(&self, key: &str) -> Option<SearchData> {
+        let mut cache = self.cache.lock().ok()?;
+        match cache.get(key) {
+            Some((stored_at, data)) if stored_at.elapsed() < CACHE_TTL => {
+                let mut data = data.clone();
+                data.metadata.cached = true;
+                Some(data)
+            }
+            Some(_) => {
+                cache.remove(key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    fn cache_put(&self, key: String, data: &SearchData) {
+        if let Ok(mut cache) = self.cache.lock() {
+            if cache.len() >= CACHE_MAX {
+                cache.retain(|_, (at, _)| at.elapsed() < CACHE_TTL);
+                if cache.len() >= CACHE_MAX {
+                    cache.clear();
+                }
+            }
+            cache.insert(key, (Instant::now(), data.clone()));
+        }
+    }
+
+    fn cooling(&self) -> HashSet<&'static str> {
+        let now = Instant::now();
+        self.cooldowns
+            .lock()
+            .map(|map| {
+                map.iter()
+                    .filter(|(_, until)| **until > now)
+                    .map(|(id, _)| *id)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn mark_blocked(&self, id: &'static str) {
+        if let Ok(mut map) = self.cooldowns.lock() {
+            map.insert(id, Instant::now() + COOLDOWN_AFTER_BLOCK);
+        }
+        tracing::warn!(engine = id, cooldown_s = COOLDOWN_AFTER_BLOCK.as_secs(), "engine blocked upstream, cooling down");
     }
 
     pub fn engine_ids(&self) -> Vec<&'static str> {
@@ -89,14 +163,39 @@ impl Orchestrator {
         let terms = relevance::Terms::build(&req.query);
         let plan = self.plan(req);
 
-        let mut tasks: Vec<(Arc<dyn Engine>, Duration)> = Vec::new();
-        for engine in &plan.primary {
-            tasks.push((engine.clone(), self.config.tier_a_timeout));
+        // Repeat queries are free: no upstream traffic, no quota spent.
+        let cache_key = Self::cache_key(req, max_results);
+        if let Some(hit) = self.cache_get(&cache_key) {
+            tracing::debug!(query = %req.query, "cache hit");
+            return Ok(hit);
         }
-        for engine in &plan.secondary {
-            tasks.push((engine.clone(), self.config.tier_b_timeout));
+
+        let cooling = self.cooling();
+        let mut skipped: Vec<&'static str> = Vec::new();
+        let mut tasks: Vec<(Arc<dyn Engine>, Duration)> = Vec::new();
+        for (engine, timeout) in plan
+            .primary
+            .iter()
+            .map(|e| (e, self.config.tier_a_timeout))
+            .chain(plan.secondary.iter().map(|e| (e, self.config.tier_b_timeout)))
+        {
+            if cooling.contains(&engine.id()) {
+                skipped.push(engine.id());
+                continue;
+            }
+            tasks.push((engine.clone(), timeout));
+        }
+        // Every engine is cooling down: try anyway rather than fail without asking.
+        if tasks.is_empty() {
+            for engine in &plan.primary {
+                tasks.push((engine.clone(), self.config.tier_a_timeout));
+            }
         }
         tasks.truncate(self.config.max_upstream_requests.max(1));
+        // One engine left: give it the whole budget instead of the tier timeout.
+        if tasks.len() == 1 {
+            tasks[0].1 = LONE_ENGINE_BUDGET;
+        }
 
         let mut set: JoinSet<EngineRun> = JoinSet::new();
         for (engine, timeout) in tasks {
@@ -117,9 +216,49 @@ impl Orchestrator {
                 Err(err) => tracing::warn!(%err, "engine task failed to join"),
             }
         }
-        if runs.is_empty() {
-            return Err("no engine could be scheduled".to_string());
+        for run in &runs {
+            if let Err(EngineError::Blocked(_)) = &run.outcome {
+                self.mark_blocked(run.id);
+            }
         }
+        if runs.is_empty() {
+            return Err(format!(
+                "no engine could be scheduled (cooling down: {})",
+                skipped.join(", ")
+            ));
+        }
+
+        // Tier C: every engine failed. Retry the one that was not hard-blocked with the
+        // full budget — a slow-but-working engine is exactly the case a fixed tier
+        // timeout throws away.
+        if runs.iter().all(|r| r.outcome.is_err()) {
+            let retry_id = runs
+                .iter()
+                .find(|r| !matches!(r.outcome, Err(EngineError::Blocked(_))))
+                .map(|r| r.id)
+                .or_else(|| plan.primary.first().map(|e| e.id()));
+            if let Some(id) = retry_id {
+                let candidate = plan
+                    .primary
+                    .iter()
+                    .chain(plan.secondary.iter())
+                    .find(|e| e.id() == id)
+                    .cloned();
+                if let Some(engine) = candidate {
+                    tracing::info!(engine = id, budget_ms = LONE_ENGINE_BUDGET.as_millis(), "retrying survivor with full budget");
+                    let begin = Instant::now();
+                    let outcome = engine.search(&req.query, max_results, LONE_ENGINE_BUDGET).await;
+                    runs.retain(|r| r.id != id);
+                    runs.push(EngineRun {
+                        id,
+                        weight: engine.weight(),
+                        outcome,
+                        elapsed_ms: begin.elapsed().as_millis(),
+                    });
+                }
+            }
+        }
+
         if runs.iter().all(|r| r.outcome.is_err()) {
             let details: Vec<String> = runs
                 .iter()
@@ -240,7 +379,7 @@ impl Orchestrator {
             degraded,
         };
 
-        Ok(SearchData {
+        let data = SearchData {
             metadata: Metadata {
                 total_results: results.len(),
                 search_time_ms: started.elapsed().as_millis(),
@@ -250,7 +389,14 @@ impl Orchestrator {
                 filters: filter_stats,
             },
             results,
-        })
+        };
+
+        // Only successful, non-empty result sets are cached: caching a transient
+        // failure would keep serving it for five minutes.
+        if !data.results.is_empty() {
+            self.cache_put(cache_key, &data);
+        }
+        Ok(data)
     }
 }
 
