@@ -2,7 +2,7 @@
 
 A self-hosted search backend for AI agents. One binary serves an HTTP API, an MCP (stdio) server and a CLI, and all three return the same ranked, filtered results — no search API key, no per-query billing.
 
-[中文说明](#中文说明) · [Documentation](docs/) · [Releases](https://github.com/my3254/sampleSearch/releases)
+[中文说明](#中文说明) · [Releases](https://github.com/my3254/sampleSearch/releases)
 
 ---
 
@@ -105,7 +105,7 @@ The envelope is intentionally compatible with AnySearch's contract, so an existi
 3. **Filter chain.** Noise hosts, aggregator titles, site homepages, low matches, title-only matches, entity pages, script mismatches and duplicate snippets are removed in a fixed order.
 4. **Scoring and diversification.** Reciprocal-rank fusion across sources, then weighted features (concept coverage, phrase hit, domain authority, freshness, length), then a per-domain cap.
 
-Measured on a nine-query set (`node probe/eval.mjs`): precision rose from 0.79 to 1.00 while the average result count fell from 4.8 to 3.9. That trade is deliberate — see [the precision handbook](docs/2026-10-24-precision.md).
+Measured on a nine-query set (`node probe/eval.mjs`): precision rose from 0.79 to 1.00 while the average result count fell from 4.8 to 3.9. That trade is deliberate.
 
 ## Limits
 
@@ -140,14 +140,6 @@ Measured on a nine-query set (`node probe/eval.mjs`): precision rose from 0.79 t
 
 Per-client snippets: [integrations/README.md](integrations/README.md).
 
-## Documentation
-
-| Document | Contents |
-| --- | --- |
-| [docs/search-sources-survey.md](docs/search-sources-survey.md) | Where search MCP servers get their results, and what we adopt from that |
-| [docs/2026-10-24-architecture.md](docs/2026-10-24-architecture.md) | Pluggable channels (declarative / native / external), hot reload, scoring pipeline |
-| [docs/2026-10-24-precision.md](docs/2026-10-24-precision.md) | Filter chain, thresholds, measured numbers, known false drops |
-| [docs/2026-10-24-samplesearch-plan.md](docs/2026-10-24-samplesearch-plan.md) | Source reachability matrix, routing rules, milestones |
 
 ## License
 
@@ -223,7 +215,7 @@ MCP 客户端配置：
 3. **过滤链**：噪声域名、聚合页标题、站点首页、低命中、标题无概念、纯实体页、语种不匹配、重复摘要，按固定顺序剔除。
 4. **融合与重排**：跨源 RRF 融合，再按概念覆盖、整句命中、域名权威度、时效、长度加权排序，最后限制单域名条数。
 
-在九条查询的评测集上（`node probe/eval.mjs`）：准确率从 0.79 提升到 1.00，平均返回条数从 4.8 降到 3.9。这个取舍是刻意的，细节见[精度手册](docs/2026-10-24-precision.md)。
+在九条查询的评测集上（`node probe/eval.mjs`）：准确率从 0.79 提升到 1.00，平均返回条数从 4.8 降到 3.9。这个取舍是刻意的。
 
 ### 已知限制
 

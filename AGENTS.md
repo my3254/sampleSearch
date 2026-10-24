@@ -10,7 +10,7 @@
 
 **已确认决策**：纯自用 · 本机 Windows · HTTP API + MCP 同交付 · **Rust** · **不接任何需要反爬的源** · **海外源默认关闭、一个开关打开** · **不"都搜一遍"（1 主 + ≤2 附加 + 不足才兜底，上限 4 请求）**。
 
-**完整设计**：[实施计划](docs/2026-10-24-samplesearch-plan.md)（源矩阵、路由、里程碑） + [架构设计](docs/2026-10-24-architecture.md)（插件化渠道、热加载、打分体系） + [精度手册](docs/2026-10-24-precision.md)（过滤链、概念匹配、实测数字）。
+**设计资料只在本地**（`docs/` 已被 `.gitignore` 排除，不入库）：`2026-10-24-samplesearch-plan.md`（源矩阵、路由、里程碑）、`2026-10-24-architecture.md`（插件化渠道、热加载、打分体系）、`2026-10-24-precision.md`（过滤链、概念匹配、实测数字）、`search-sources-survey.md`（MCP 搜索源调研）。
 
 ## Agent 接入（三种入口，共用同一核心）
 
@@ -46,8 +46,7 @@
 ```
 samplesearch/
 ├─ AGENTS.md
-├─ docs/2026-10-24-samplesearch-plan.md   实施计划 v0.4
-├─ docs/2026-10-24-architecture.md    架构基线：插件化渠道 / 热加载 / 打分体系
+├─ docs/                            本地设计资料（不入库）
 └─ probe/                             Node ESM 探针（沙箱内唯一可靠出网通道）
    ├─ endpoints.mjs   15 个通用/海外源可达性
    ├─ extract.mjs     AnySearch 画像 + 各引擎 HTML/RSS 结构

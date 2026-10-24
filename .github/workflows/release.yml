@@ -19,12 +19,23 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             asset: win-x64.zip
+            binary: samplesearch.exe
           - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             asset: linux-x64.tar.gz
+            binary: samplesearch
+          - os: ubuntu-22.04
+            target: aarch64-unknown-linux-gnu
+            asset: linux-arm64.tar.gz
+            binary: samplesearch
+          - os: macos-14
+            target: x86_64-apple-darwin
+            asset: macos-x64.tar.gz
+            binary: samplesearch
           - os: macos-14
             target: aarch64-apple-darwin
             asset: macos-arm64.tar.gz
+            binary: samplesearch
     steps:
       - uses: actions/checkout@v4
 
@@ -32,10 +43,25 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build
+      # Cross-compiling to linux/arm64 needs a cross linker; native targets do not.
+      - name: Cross toolchain
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build (native)
+        if: matrix.target != 'aarch64-unknown-linux-gnu'
         run: cargo build --release --locked --target ${{ matrix.target }}
         env:
           CARGO_NET_RETRY: 5
+
+      - name: Build (linux arm64)
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          CARGO_NET_RETRY: 5
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Assemble package
         shell: bash
@@ -44,11 +70,7 @@ jobs:
           VER="${GITHUB_REF_NAME:-dev}"
           OUT="dist/samplesearch-${VER}-${{ matrix.asset }}"
           mkdir -p dist pkg/bin
-          if [[ "${{ matrix.asset }}" == *.zip ]]; then
-            cp "target/${{ matrix.target }}/release/samplesearch.exe" pkg/bin/
-          else
-            cp "target/${{ matrix.target }}/release/samplesearch" pkg/bin/
-          fi
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" pkg/bin/
           cp README.md pkg/
           cp integrations/skill/SKILL.md pkg/SKILL.md
           cp -r integrations pkg/integrations
@@ -79,21 +101,26 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*
+          overwrite_files: true
           generate_release_notes: true
           body: |
-            Self-hosted search for AI agents — one binary, three entry points (HTTP / MCP stdio / CLI).
+            Self-hosted search for AI agents: one binary, three entry points (HTTP / MCP stdio / CLI).
 
-            **Install (Windows)**
+            Nine engines: 360 and Bing for general web, plus GitHub, Stack Exchange, Hacker News,
+            arXiv, Crossref, npm and PyPI through their official APIs. No search API key needed.
+
+            **Windows**
 
             ```powershell
             irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
             ```
 
-            **Install (macOS / Linux)**
+            **macOS / Linux**
 
             ```bash
             curl -fsSL https://raw.githubusercontent.com/my3254/sampleSearch/main/install.sh | bash
             ```
 
-            The installer drops the binary into a per-user directory, adds it to `PATH`, installs the agent skill,
-            and prints the MCP config. `-InstallDshPlugin` (PowerShell) also registers the native DeepSeek Harness plugin — no MCP bridge needed.
+            The installer picks the asset for your platform, adds the binary to `PATH`, installs the
+            agent skill and prints the MCP configuration. `-InstallDshPlugin` (PowerShell) also
+            registers the native DeepSeek Harness plugin.

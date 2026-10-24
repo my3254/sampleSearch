@@ -1,0 +1,12 @@
+# Keep shell scripts LF so `curl … | bash` works on every machine,
+# and PowerShell scripts CRLF so Windows editors and `-File` stay happy.
+* text=auto
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.rs   text eol=lf
+*.json text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.md   text eol=lf
+*.ps1  text eol=crlf

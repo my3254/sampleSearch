@@ -25,3 +25,7 @@
 # machine-specific cargo config (see cargo-config.toml.example)
 /.cargo/config.toml
 
+
+# design notes stay local
+/docs
+

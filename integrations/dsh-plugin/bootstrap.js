@@ -21,10 +21,15 @@ import { pipeline } from 'node:stream/promises';
 const REPO = 'my3254/sampleSearch';
 
 export function assetFor(platformName = platform(), archName = arch()) {
-  if (platformName === 'win32' && archName === 'x64') return { suffix: 'win-x64.zip', binary: 'samplesearch.exe' };
-  if (platformName === 'linux' && archName === 'x64') return { suffix: 'linux-x64.tar.gz', binary: 'samplesearch' };
-  if (platformName === 'darwin' && archName === 'arm64') return { suffix: 'macos-arm64.tar.gz', binary: 'samplesearch' };
-  return null;
+  const map = {
+    'win32-x64': ['win-x64.zip', 'samplesearch.exe'],
+    'linux-x64': ['linux-x64.tar.gz', 'samplesearch'],
+    'linux-arm64': ['linux-arm64.tar.gz', 'samplesearch'],
+    'darwin-x64': ['macos-x64.tar.gz', 'samplesearch'],
+    'darwin-arm64': ['macos-arm64.tar.gz', 'samplesearch'],
+  };
+  const hit = map[`${platformName}-${archName}`];
+  return hit ? { suffix: hit[0], binary: hit[1] } : null;
 }
 
 export function installDir() {

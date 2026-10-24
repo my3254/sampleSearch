@@ -46,8 +46,8 @@ esac
 # Only the shipped asset names are supported; refuse anything else loudly.
 ASSET="${OS}-${ARCH}.tar.gz"
 case "$ASSET" in
-  macos-arm64.tar.gz|linux-x64.tar.gz) ;;
-  *) echo "no prebuilt asset for ${OS}/${ARCH} yet; build from source: cargo build --release" >&2; exit 1 ;;
+  macos-arm64.tar.gz|macos-x64.tar.gz|linux-x64.tar.gz|linux-arm64.tar.gz) ;;
+  *) echo "no prebuilt asset for ${OS}/${ARCH}; build from source: cargo build --release" >&2; exit 1 ;;
 esac
 
 TMP="$(mktemp -d)"
