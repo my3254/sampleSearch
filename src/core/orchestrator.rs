@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use tokio::task::JoinSet;
 
 use crate::config::Config;
+use crate::core::ratelimit::RateLimiter;
 use crate::core::{dedupe, filter, fusion, gates, normalize, relevance, score};
 use crate::engines::{Engine, EngineError, EngineOutput, RawItem};
 use crate::model::{
@@ -28,6 +29,69 @@ pub struct Orchestrator {
     cache: Mutex<HashMap<String, (Instant, SearchData)>>,
     /// engine id → instant until which it is skipped (captcha / rate-limit backoff).
     cooldowns: Mutex<HashMap<&'static str, Instant>>,
+    limiter: RateLimiter,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Intent {
+    General,
+    Code,
+    Academic,
+}
+
+/// Cheap intent routing. Deliberately rule-based: it runs on every request and must
+/// never add latency or depend on a model.
+fn detect_intent(query: &str, domain: Option<&str>) -> Intent {
+    match domain {
+        Some("code") => return Intent::Code,
+        Some("academic") => return Intent::Academic,
+        _ => {}
+    }
+    let q = query.to_lowercase();
+    const ACADEMIC: &[&str] = &[
+        "arxiv", "doi", "paper", "论文", "文献", "综述", "citation", "journal", "conference", "et al",
+    ];
+    const CODE: &[&str] = &[
+        "error", "exception", "traceback", "panic", "stack trace", "pip install", "npm install",
+        "npm i ", "cargo ", "import ", "fn ", "undefined", "#issue", ".py", ".ts", ".rs", ".go",
+        "select", "async", "await", "runtime", "compile", "debug", "docker", "sql", "http",
+        "json", "regex", "python", "rust", "kotlin", "typescript", "deploy",
+        "middleware", "endpoint", "webhook", "graphql", "grpc", "kafka", "redis", "postgres",
+        "mysql", "lambda", "terraform", "kubernetes", "webpack", "vite", "pytest", "numpy",
+        "pandas", "django", "flask", "fastapi", "express", "nextjs", "react", "vue", "svelte",
+    ];
+    if ACADEMIC.iter().any(|m| q.contains(m)) || has_arxiv_id(&q) {
+        Intent::Academic
+    } else if CODE.iter().any(|m| q.contains(m)) {
+        Intent::Code
+    } else if looks_like_package(&q) {
+        // A bare package name ("requests", "python-dateutil") is a lookup, not a web query.
+        Intent::Code
+    } else {
+        Intent::General
+    }
+}
+
+fn looks_like_package(q: &str) -> bool {
+    let trimmed = q.trim();
+    trimmed.chars().count() >= 3
+        && !trimmed.contains(char::is_whitespace)
+        && trimmed.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
+
+/// `2401.12345`, `2401.1234v2` — an arXiv identifier in the query.
+fn has_arxiv_id(q: &str) -> bool {
+    q.split(|c: char| !(c.is_ascii_digit() || c == '.' || c == 'v'))
+        .any(|token| match token.split_once('.') {
+            Some((left, right)) => {
+                let right = right.trim_end_matches('v');
+                left.len() == 4
+                    && (4..=5).contains(&right.len())
+                    && left.chars().all(|c| c.is_ascii_digit())
+                    && right.chars().all(|c| c.is_ascii_digit())
+            }
+            None => false,
+        })
 }
 
 pub struct Plan {
@@ -50,6 +114,7 @@ impl Orchestrator {
             engines,
             cache: Mutex::new(HashMap::new()),
             cooldowns: Mutex::new(HashMap::new()),
+            limiter: RateLimiter::new(),
         }
     }
 
@@ -115,43 +180,74 @@ impl Orchestrator {
         self.engines.iter().map(|e| e.id()).collect()
     }
 
-    /// Engine selection. M0 is intentionally simple: pick the language-appropriate
-    /// primary set and fire the other concurrently as the fallback tier. The
-    /// signal table (routing.json) replaces this in M1 behind the same interface.
+    /// Remaining local tokens per engine, for `/health`. `None` means the engine has
+    /// not been called yet in this process.
+    pub fn quota_snapshot(&self) -> Vec<(&'static str, Option<f32>)> {
+        self.engines.iter().map(|e| (e.id(), self.limiter.available(e.id()))).collect()
+    }
+
+    /// Engine selection: route by intent, then fall back to general web engines.
+    ///
+    /// Code and academic queries go to the official-API engines first, because those
+    /// have published quotas and never answer with a captcha. Everything else uses the
+    /// general web engines, with the other language's engine as the fallback tier.
     pub fn plan(&self, req: &SearchRequest) -> Plan {
         let prefer_cn = gates::is_cjk_query(&req.query);
-        let intent = match &req.domain {
-            Some(d) if d != "general" => d.clone(),
-            _ if prefer_cn => "general_cn".to_string(),
-            _ => "general_en".to_string(),
+        let intent = match detect_intent(&req.query, req.domain.as_deref()) {
+            Intent::Academic => "academic",
+            Intent::Code => "code",
+            Intent::General if prefer_cn => "general_cn",
+            Intent::General => "general_en",
         };
-        let domain_filter = req.domain.as_deref().filter(|d| *d != "general");
 
-        let mut primary = Vec::new();
-        let mut secondary = Vec::new();
-        for engine in &self.engines {
-            if let Some(domain) = domain_filter {
-                if !engine.domains().contains(&domain) {
-                    continue;
+        let (mut primary, secondary): (Vec<Arc<dyn Engine>>, Vec<Arc<dyn Engine>>) = match intent {
+            "academic" => (
+                self.pick(&["arxiv", "crossref"], req),
+                self.pick_general(prefer_cn, req).into_iter().take(1).collect(),
+            ),
+            "code" if looks_like_package(&req.query) => (
+                self.pick(&["pypi", "github"], req),
+                self.pick(&["npm", "stackexchange"], req).into_iter().take(2).collect(),
+            ),
+            "code" => (
+                self.pick(&["github", "stackexchange"], req),
+                self.pick(&["hn", "npm", "pypi"], req).into_iter().take(2).collect(),
+            ),
+            _ => (
+                self.pick_general(prefer_cn, req).into_iter().take(1).collect(),
+                self.pick_general(!prefer_cn, req).into_iter().take(1).collect(),
+            ),
+        };
+
+        // Intent matched nothing usable (quota, capability): use general web engines.
+        if primary.is_empty() && secondary.is_empty() {
+            primary = self.pick_general(prefer_cn, req).into_iter().take(1).collect();
+        }
+
+        Plan { intent: intent.to_string(), primary, secondary }
+    }
+
+    fn pick(&self, ids: &[&str], req: &SearchRequest) -> Vec<Arc<dyn Engine>> {
+        let mut out = Vec::new();
+        for id in ids {
+            if let Some(engine) = self.engines.iter().find(|e| e.id() == *id) {
+                if !req.domain.as_deref().is_some_and(|d| d != "general" && !engine.domains().contains(&d)) {
+                    if engine.supports(&req.query) {
+                        out.push(engine.clone());
+                    }
                 }
             }
-            let is_cn_engine = engine.id() == "so360";
-            if is_cn_engine == prefer_cn {
-                primary.push(engine.clone());
-            } else {
-                secondary.push(engine.clone());
-            }
         }
+        out
+    }
 
-        // Explicit domain matched nothing: fall back to general engines instead of
-        // returning an empty result set.
-        if primary.is_empty() && secondary.is_empty() {
-            if let Some(general) = self.engines.iter().find(|e| e.domains().contains(&"general")) {
-                primary.push(general.clone());
-            }
-        }
-
-        Plan { intent, primary, secondary }
+    fn pick_general(&self, cn: bool, req: &SearchRequest) -> Vec<Arc<dyn Engine>> {
+        let wanted = if cn { "so360" } else { "bing" };
+        self.engines
+            .iter()
+            .filter(|e| e.id() == wanted && e.supports(&req.query))
+            .cloned()
+            .collect()
     }
 
     pub async fn search(&self, req: &SearchRequest) -> Result<SearchData, String> {
@@ -183,7 +279,13 @@ impl Orchestrator {
                 skipped.push(engine.id());
                 continue;
             }
-            tasks.push((engine.clone(), timeout));
+            let (capacity, refill_secs) = engine.rate_limit();
+            if !self.limiter.try_acquire(engine.id(), capacity, refill_secs) {
+                tracing::debug!(engine = engine.id(), "local quota spent, skipping this query");
+                skipped.push(engine.id());
+                continue;
+            }
+            tasks.push((engine.clone(), timeout.max(engine.timeout_hint())));
         }
         // Every engine is cooling down: try anyway rather than fail without asking.
         if tasks.is_empty() {
@@ -461,8 +563,29 @@ mod tests {
     #[test]
     fn prefers_bing_for_english_queries() {
         let orch = Orchestrator::new(Config::default(), vec![stub("so360", 1.0), stub("bing", 0.8)]);
-        let plan = orch.plan(&req("tokio select usage"));
+        let plan = orch.plan(&req("weather in hangzhou"));
         assert_eq!(plan.intent, "general_en");
         assert_eq!(plan.primary[0].id(), "bing");
+    }
+
+    #[test]
+    fn routes_developer_queries_to_vertical_engines() {
+        let engines: Vec<Arc<dyn Engine>> = vec![
+            stub("so360", 1.0),
+            stub("bing", 0.8),
+            stub("github", 0.9),
+            stub("stackexchange", 0.8),
+            stub("arxiv", 0.95),
+            stub("crossref", 0.9),
+        ];
+        let orch = Orchestrator::new(Config::default(), engines);
+
+        let code = orch.plan(&req("tokio select usage"));
+        assert_eq!(code.intent, "code");
+        assert_eq!(code.primary[0].id(), "github");
+
+        let academic = orch.plan(&req("arxiv 2401.00001"));
+        assert_eq!(academic.intent, "academic");
+        assert_eq!(academic.primary[0].id(), "arxiv");
     }
 }

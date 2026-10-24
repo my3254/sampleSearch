@@ -11,7 +11,7 @@ A self-hosted search backend for AI agents. One binary serves an HTTP API, an MC
 Most "AI search" products are a hosted index with a per-query price. samplesearch takes a different position: it queries public result pages and official data APIs that are free to read, then spends its effort on the part that actually determines answer quality — deciding which results to keep.
 
 - **One binary, three entry points.** `serve` (HTTP), `mcp` (MCP stdio), `search` (one-shot CLI). Same pipeline underneath, so behaviour cannot diverge between clients.
-- **No API key required.** 360 supplies Chinese coverage, Bing supplies English and fallback. Optional overseas engines stay off unless enabled.
+- **Nine engines, two kinds.** 360 and Bing read public result pages for general queries; GitHub, Stack Exchange, Hacker News, arXiv, Crossref, npm and PyPI are queried through their official APIs, which publish quotas and never answer with a captcha.
 - **Precision before recall.** Query terms are matched as concepts, not as character fragments; seven filters remove aggregator pages, site homepages, entity-only titles and unrelated hits before scoring. Results that would be filler are dropped, and `metadata.filters` reports what was dropped and why.
 - **Rust, single file.** ~6 MB release binary, no runtime, no resident sidecar beyond the one process.
 
@@ -125,6 +125,9 @@ Measured on a nine-query set (`node probe/eval.mjs`): precision rose from 0.79 t
 | `SAMPLESEARCH_DEFAULT_MAX` | `10` | Default `max_results` |
 | `SAMPLESEARCH_INTL` | `0` | Enable overseas engines |
 | `SAMPLESEARCH_PROXY` | — | Proxy for overseas engines only |
+| `SAMPLESEARCH_GITHUB_TOKEN` | — | Raises GitHub search from 10 to 30 requests/minute |
+| `SAMPLESEARCH_SE_KEY` | — | Raises Stack Exchange from 300 to 10,000 requests/day |
+| `SAMPLESEARCH_CONTACT` | — | Email sent to Crossref as `mailto` (polite pool) |
 
 ## Integrations
 
@@ -148,9 +151,9 @@ Per-client snippets: [integrations/README.md](integrations/README.md).
 
 ## Roadmap
 
-- **v0.2** — official-API engines (GitHub, Hacker News, arXiv, Crossref, npm, PyPI, StackExchange), per-engine token buckets, engine health in `/health`
-- **v0.3** — declarative engine specs (`config/engines/*.json`) with hot reload; `/v1/sub-domains` and `/v1/extract`
-- **v0.4** — optional keyed providers behind config; weight calibration driven by the evaluation set
+- **v0.1 (current)** — nine engines: general web plus seven official APIs; per-engine token buckets sized from measured quotas; intent routing; engine quota visible in `/health`
+- **v0.2** — declarative engine specs (`config/engines/*.json`) with hot reload; `/v1/sub-domains` and `/v1/extract`
+- **v0.3** — optional keyed providers behind config; weight calibration driven by the evaluation set
 
 ## License
 
@@ -167,7 +170,7 @@ MIT
 市面上多数"AI 搜索"是托管索引 + 按次收费。samplesearch 走另一条路：查询公开结果页与免费官方数据接口，把工程投入放在真正决定回答质量的一环——**决定哪些结果留下来**。
 
 - **一个二进制，三种入口**：`serve`（HTTP）、`mcp`（MCP stdio）、`search`（一次性 CLI）。共用同一套管线，客户端之间不会出现行为差异。
-- **零 API key**：360 覆盖中文，Bing 覆盖英文与兜底；海外源默认关闭，需要时才开。
+- **九个引擎，两类来源**：360 与 Bing 读公开结果页，负责通用查询；GitHub、Stack Exchange、Hacker News、arXiv、Crossref、npm、PyPI 走官方 API，有公开配额、不会弹验证码。
 - **精度优先于召回**：查询词按"概念"匹配而非字符片段；七道过滤器在打分前剔除聚合页、站点首页、纯实体标题与无关命中。被丢弃的结果会带原因回报在 `metadata.filters` 里。
 - **Rust 单文件**：release 约 6 MB，无运行时依赖。
 
@@ -246,12 +249,15 @@ MCP 客户端配置：
 | `SAMPLESEARCH_DEFAULT_MAX` | `10` | 默认 `max_results` |
 | `SAMPLESEARCH_INTL` | `0` | 是否启用海外引擎 |
 | `SAMPLESEARCH_PROXY` | — | 仅海外引擎使用的代理 |
+| `SAMPLESEARCH_GITHUB_TOKEN` | — | 把 GitHub 搜索配额从 10 次/分提到 30 次/分 |
+| `SAMPLESEARCH_SE_KEY` | — | 把 Stack Exchange 配额从 300 次/天提到 10,000 次/天 |
+| `SAMPLESEARCH_CONTACT` | — | 作为 `mailto` 发给 Crossref（polite pool） |
 
 ### 路线图
 
-- **v0.2**：官方 API 源（GitHub、Hacker News、arXiv、Crossref、npm、PyPI、StackExchange）、每引擎令牌桶、`/health` 暴露引擎健康度
-- **v0.3**：声明式渠道配置（`config/engines/*.json`）与热加载；`/v1/sub-domains`、`/v1/extract`
-- **v0.4**：可选的付费 provider；用评测集校准打分权重
+- **v0.1（当前）**：九个引擎（通用网页 + 七个官方 API）、按实测配额设定的每引擎令牌桶、意图路由、`/health` 暴露各引擎剩余额度
+- **v0.2**：声明式渠道配置（`config/engines/*.json`）与热加载；`/v1/sub-domains`、`/v1/extract`
+- **v0.3**：可选的付费 provider；用评测集校准打分权重
 
 ### 许可
 

@@ -1,5 +1,12 @@
+pub mod arxiv;
 pub mod bing;
+pub mod crossref;
+pub mod github;
+pub mod hn;
+pub mod npm;
+pub mod pypi;
 pub mod so360;
+pub mod stackexchange;
 
 use std::time::Duration;
 
@@ -38,6 +45,8 @@ pub enum EngineError {
     Parse(String),
     #[error("blocked by upstream: {0}")]
     Blocked(String),
+    #[error("rate limited by upstream")]
+    RateLimited,
     #[error("network error: {0}")]
     Network(String),
 }
@@ -56,12 +65,63 @@ pub trait Engine: Send + Sync {
     fn weight(&self) -> f32;
     /// Domains this engine can answer; `general` for web search engines.
     fn domains(&self) -> &'static [&'static str];
+    /// Local politeness budget: (capacity, seconds to refill the whole bucket).
+    /// Sized from each provider's published or measured anonymous quota.
+    fn rate_limit(&self) -> (f32, u64) {
+        (4.0, 60)
+    }
+    /// Per-engine timeout floor. Public result pages answer in ~300 ms; official APIs
+    /// regularly take 3-5 s, so a single tier timeout cannot serve both.
+    fn timeout_hint(&self) -> Duration {
+        Duration::from_millis(1800)
+    }
+    /// Whether this engine can answer the query at all. Vertical engines narrow this
+    /// (PyPI only answers package-shaped queries); general engines accept everything.
+    fn supports(&self, _query: &str) -> bool {
+        true
+    }
     async fn search(
         &self,
         query: &str,
         max_results: usize,
         timeout: Duration,
     ) -> Result<EngineOutput, EngineError>;
+}
+
+/// Shared GET for JSON/XML APIs. Keeps adapters to parse + map only.
+pub(crate) async fn fetch_body(
+    client: &reqwest::Client,
+    url: reqwest::Url,
+    headers: &[(&str, String)],
+    timeout: Duration,
+) -> Result<(u16, String), EngineError> {
+    let mut request = client.get(url).timeout(timeout);
+    for (name, value) in headers {
+        request = request.header(*name, value);
+    }
+    let response = request.send().await.map_err(map_reqwest)?;
+    let status = response.status().as_u16();
+    let body = response.text().await.map_err(map_reqwest)?;
+    Ok((status, body))
+}
+
+pub(crate) fn map_reqwest(error: reqwest::Error) -> EngineError {
+    if error.is_timeout() {
+        EngineError::Timeout
+    } else {
+        EngineError::Network(error.to_string())
+    }
+}
+
+pub(crate) fn url_with(base: &str, params: &[(&str, String)]) -> Option<reqwest::Url> {
+    let mut url = reqwest::Url::parse(base).ok()?;
+    {
+        let mut pairs = url.query_pairs_mut();
+        for (key, value) in params {
+            pairs.append_pair(key, value);
+        }
+    }
+    Some(url)
 }
 
 pub fn build_client(config: &Config) -> anyhow::Result<reqwest::Client> {

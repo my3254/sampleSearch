@@ -4,5 +4,6 @@ pub mod fusion;
 pub mod gates;
 pub mod normalize;
 pub mod orchestrator;
+pub mod ratelimit;
 pub mod relevance;
 pub mod score;
