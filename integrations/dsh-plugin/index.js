@@ -46,6 +46,18 @@ function defineTool(options) {
 }
 
 
+function stripAnsi(text) {
+  return String(text || '').replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function parseEnvelope(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 /** Run the CLI once and parse its JSON envelope. */
 function runCli(bin, args, timeoutMs) {
   return new Promise((resolve, reject) => {
@@ -59,7 +71,12 @@ function runCli(bin, args, timeoutMs) {
 
     let child;
     try {
-      child = spawn(bin, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(bin, args, {
+        windowsHide: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        // The CLI is machine-facing here: stdout is the payload, so keep stderr quiet.
+        env: { ...process.env, RUST_LOG: process.env.SAMPLESEARCH_LOG || 'error' },
+      });
     } catch (error) {
       reject(error);
       return;
@@ -95,15 +112,22 @@ function runCli(bin, args, timeoutMs) {
       finish(reject, error);
     });
     child.on('close', (code) => {
+      // The CLI writes its failure envelope to stdout and exits 3; stderr only carries
+      // log lines. Report the envelope, never the log stream.
+      const envelope = parseEnvelope(stdout);
       if (code !== 0) {
-        finish(reject, new Error(`samplesearch exited with ${code}: ${(stderr || stdout).trim()}`));
+        const reason =
+          (envelope && envelope.message) ||
+          stripAnsi(stderr).trim().split('\n').filter(Boolean).slice(-3).join(' ') ||
+          `samplesearch exited with ${code}`;
+        finish(reject, new Error(reason));
         return;
       }
-      try {
-        finish(resolve, JSON.parse(stdout));
-      } catch {
-        finish(reject, new Error(`samplesearch returned invalid JSON: ${stdout.slice(0, 300)}`));
+      if (envelope) {
+        finish(resolve, envelope);
+        return;
       }
+      finish(reject, new Error(`samplesearch returned invalid JSON: ${stripAnsi(stdout).slice(0, 300)}`));
     });
   });
 }

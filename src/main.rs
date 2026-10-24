@@ -22,18 +22,23 @@ async fn main() -> anyhow::Result<()> {
     // otherwise the first TLS handshake panics.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
-    // Logs go to stderr in every mode: `mcp` owns stdout for JSON-RPC.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let command = args.first().map(String::as_str).unwrap_or("serve");
+
+    // Logs go to stderr in every mode: `mcp` owns stdout for JSON-RPC. One-shot CLI
+    // commands stay quiet by default — their caller reads stdout, and a stderr full of
+    // WARN lines reads like an error in any tool output that merges the two.
+    let default_filter = match command {
+        "serve" | "mcp" => "info,samplesearch=debug,tower_http=warn",
+        _ => "error",
+    };
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new("info,samplesearch=debug,tower_http=warn")),
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter)),
         )
         .with_target(false)
         .init();
-
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let command = args.first().map(String::as_str).unwrap_or("serve");
 
     match command {
         "serve" => serve().await,
