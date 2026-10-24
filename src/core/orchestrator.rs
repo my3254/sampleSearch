@@ -382,11 +382,15 @@ impl Orchestrator {
         for run in &runs {
             match &run.outcome {
                 Ok(output) => {
-                    let pass = output
-                        .items
-                        .iter()
-                        .take(3)
-                        .any(|item| terms.passes(&format!("{} {}", item.title, item.snippet)));
+                    // An exact arXiv identifier is a lookup, not a keyword query: the
+                    // returned papers legitimately do not repeat the id in their titles.
+                    let id_lookup = run.id == "arxiv" && has_arxiv_id(&req.query.to_lowercase());
+                    let pass = id_lookup
+                        || output
+                            .items
+                            .iter()
+                            .take(3)
+                            .any(|item| terms.passes(&format!("{} {}", item.title, item.snippet)));
                     if !pass {
                         degraded.push(run.id.to_string());
                         tracing::debug!(engine = run.id, "relevance gate failed, weight x0.3");
