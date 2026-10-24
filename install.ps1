@@ -70,13 +70,29 @@ try {
       "https://api.github.com/repos/$Repo/releases/tags/$Version"
     }
     Write-Step "resolving release ($Version)"
-    $release = Invoke-RestMethod -Uri $api -Headers @{ 'user-agent' = 'samplesearch-installer' }
+    # curl.exe ships with Windows 10+ and uses its own TLS stack; Invoke-WebRequest
+    # goes through schannel, which some locked-down environments cannot use.
+    $hasCurl = [bool](Get-Command curl.exe -ErrorAction SilentlyContinue)
+    if ($hasCurl) {
+      $json = & curl.exe -fsSL -H 'user-agent: samplesearch-installer' $api
+      if ($LASTEXITCODE -ne 0) { throw "curl failed to read $api" }
+      $release = $json | ConvertFrom-Json
+    }
+    else {
+      $release = Invoke-RestMethod -Uri $api -Headers @{ 'user-agent' = 'samplesearch-installer' }
+    }
     $file = $release.assets | Where-Object { $_.name -like "*$asset" } | Select-Object -First 1
     if (-not $file) { throw "release $($release.tag_name) has no asset matching *$asset" }
 
     Write-Step "downloading $($file.name)"
     $zip = Join-Path $tmp $file.name
-    Invoke-WebRequest -Uri $file.browser_download_url -OutFile $zip
+    if ($hasCurl) {
+      & curl.exe -fsSL -o $zip $file.browser_download_url
+      if ($LASTEXITCODE -ne 0) { throw "curl failed to download $($file.name)" }
+    }
+    else {
+      Invoke-WebRequest -Uri $file.browser_download_url -OutFile $zip
+    }
 
     $shaAsset = $release.assets | Where-Object { $_.name -eq "$($file.name).sha256" } | Select-Object -First 1
     if ($shaAsset) {
