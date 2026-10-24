@@ -163,9 +163,11 @@ try {
       # The plugin shells out to the binary; point it at this installation explicitly
       # instead of relying on PATH having been refreshed in the running DSH process.
       $patch = Join-Path $plugin 'cordis.patch.yml'
-      $text = Get-Content $patch -Raw
-      $text = $text -replace "(?m)^(\s*)binary: ''\s*$", "`$1binary: '$(Join-Path $binDir 'samplesearch.exe')'"
-      Set-Content -Path $patch -Value $text -Encoding utf8NoBOM
+      # Explicit UTF-8 on read and write: Windows PowerShell 5.1 reads BOM-less files as
+      # ANSI (mangling non-ASCII comments), and it has no `utf8NoBOM` encoding name.
+      $text = [System.IO.File]::ReadAllText($patch, [System.Text.Encoding]::UTF8)
+      $text = $text -replace "(?m)^(\s*)binary: ''\s*$", "`${1}binary: '$(Join-Path $binDir 'samplesearch.exe')'"
+      [System.IO.File]::WriteAllText($patch, $text, (New-Object System.Text.UTF8Encoding($false)))
       & $dsh.Source plugin --profile desktop add "file:$plugin" | Out-Host
       Write-Ok "registered with DeepSeek Harness — restart DSH, then start a new conversation"
     }
