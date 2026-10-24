@@ -5,13 +5,45 @@
 // dsh-mcp-client, no MCP config file. The work is done by the Rust binary, which the
 // installer puts on PATH; `binary` overrides that path when it lives elsewhere.
 import { spawn } from 'node:child_process';
-import { defineTool } from '@deepseek-ai/dsh-tools';
 import { ensureBinary } from './bootstrap.js';
 
 export const name = 'dsh-samplesearch';
 export const inject = ['tools'];
 
 const DEFAULT_TIMEOUT_MS = 45_000;
+
+/**
+ * Local equivalent of `defineTool` from @deepseek-ai/dsh-tools.
+ *
+ * Importing the official helper would make this plugin depend on a package that is
+ * resolved from the harness installation, not from the profile — one missing peer and
+ * the plugin silently fails to load. The helper only converts a compact parameter spec
+ * into JSON Schema and wraps the output renderer, so we do that here and stay
+ * dependency-free.
+ */
+function defineTool(options) {
+  const properties = {};
+  const required = [];
+  for (const [key, spec] of Object.entries(options.parameters || {})) {
+    const { required: isRequired, ...rest } = spec;
+    properties[key] = rest;
+    if (isRequired) required.push(key);
+  }
+  return {
+    name: options.name,
+    description: options.description,
+    parameters: {
+      type: 'object',
+      properties,
+      ...(required.length > 0 ? { required } : {}),
+    },
+    output: {
+      schema: options.output.schema,
+      render: options.output.render,
+    },
+    execute: options.execute,
+  };
+}
 
 
 /** Run the CLI once and parse its JSON envelope. */
