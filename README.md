@@ -82,7 +82,8 @@ MCP clients (Claude Code, Cursor, Codex, Windsurf, DeepSeek Harness):
       "routing": { "intent": "general_cn", "primary": ["so360"],
                    "secondary": ["bing"], "degraded": ["bing"] },
       "sources": [{ "name": "so360", "count": 5, "ms": 615, "status": "ok" }],
-      "filters": [{ "reason": "low_match", "count": 3 }]
+      "filters": [{ "reason": "low_match", "count": 3 }],
+      "notice": "failed: so360 (blocked by upstream: captcha page); bing returned no relevant results"
     }
   }
 }

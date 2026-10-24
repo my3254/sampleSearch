@@ -62,9 +62,8 @@ impl Engine for HackerNews {
         let value: Value =
             serde_json::from_str(&body).map_err(|e| EngineError::Parse(e.to_string()))?;
         let items = parse(&value, max_results);
-        if items.is_empty() {
-            return Err(EngineError::Parse("no hn hits".into()));
-        }
+        // An empty result set is a legitimate answer; only transport/parse errors are Err.
+
         let parsed = items.len();
         Ok(EngineOutput { items, http_status: Some(status), parsed, elapsed_ms: started.elapsed().as_millis() })
     }

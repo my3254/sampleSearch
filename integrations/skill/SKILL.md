@@ -39,6 +39,7 @@ A local search service that aggregates free sources (360 primary for Chinese, Bi
 - `data.metadata.routing.degraded[]` — engines that failed the relevance gate. If a source is listed here, treat its items as low confidence.
 - `data.metadata.filters[]` — why candidates were dropped (`noise_host`, `aggregator_title`, `portal_root`, `low_match`, `title_mismatch`, `entity_page`, `script_mismatch`, `dup_content`). Non-empty is normal.
 - `data.metadata.total_results` may be **less than `max_results` by design**: the service refuses to pad with irrelevant hits.
+- `data.metadata.notice` — one sentence explaining an empty or thin result set (which engine was blocked, which returned nothing, how many candidates the filters dropped). Quote it to the user instead of guessing.
 
 ## Query craft
 

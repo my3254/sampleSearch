@@ -153,6 +153,7 @@ function renderEnvelope(envelope) {
   lines.push(
     `\n(${meta.total_results ?? 0} results, ${meta.search_time_ms ?? '?'} ms${sources ? `; sources: ${sources}` : ''})`,
   );
+  if (meta.notice) lines.push(`note: ${meta.notice}`);
   return lines.join('\n');
 }
 

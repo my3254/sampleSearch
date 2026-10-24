@@ -260,6 +260,9 @@ fn format_markdown(data: &SearchData) -> String {
         out.push_str(&format!("; filtered: {}", filters.join(" ")));
     }
     out.push_str(")\n");
+    if let Some(notice) = &data.metadata.notice {
+        out.push_str(&format!("note: {notice}\n"));
+    }
     out
 }
 

@@ -64,9 +64,8 @@ impl Engine for Arxiv {
             return Err(EngineError::Upstream(status));
         }
         let items = parse(&body, max_results);
-        if items.is_empty() {
-            return Err(EngineError::Parse("no arxiv entries".into()));
-        }
+        // An empty result set is a legitimate answer; only transport/parse errors are Err.
+
         let parsed = items.len();
         Ok(EngineOutput { items, http_status: Some(status), parsed, elapsed_ms: started.elapsed().as_millis() })
     }

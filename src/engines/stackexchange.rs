@@ -80,9 +80,8 @@ impl Engine for StackExchange {
             return Err(EngineError::RateLimited);
         }
         let items = parse(&value, max_results);
-        if items.is_empty() {
-            return Err(EngineError::Parse("no stackoverflow questions".into()));
-        }
+        // An empty result set is a legitimate answer; only transport/parse errors are Err.
+
         let parsed = items.len();
         Ok(EngineOutput { items, http_status: Some(status), parsed, elapsed_ms: started.elapsed().as_millis() })
     }

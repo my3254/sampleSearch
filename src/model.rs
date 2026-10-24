@@ -79,6 +79,10 @@ pub struct Metadata {
     pub sources: Vec<SourceStat>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub filters: Vec<FilterStat>,
+    /// One human-readable sentence for the caller: why the result set is empty or thin
+    /// (engine cooling down, local quota spent, nothing passed the filters).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]

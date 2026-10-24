@@ -79,6 +79,45 @@ fn looks_like_package(q: &str) -> bool {
         && trimmed.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
+/// One sentence a caller can repeat to the user: why the result set is empty or thin.
+/// Built from what actually happened this request, not from a generic message.
+fn compose_notice(
+    cooling: &[&'static str],
+    quota: &[&'static str],
+    empty_engines: &[String],
+    degraded: &[String],
+    errored: &[String],
+    filtered_out: usize,
+    returned: usize,
+) -> Option<String> {
+    let mut parts: Vec<String> = Vec::new();
+    if !cooling.is_empty() {
+        parts.push(format!("{} blocked upstream and is cooling down", cooling.join(", ")));
+    }
+    if !quota.is_empty() {
+        parts.push(format!("{} skipped: local request quota spent", quota.join(", ")));
+    }
+    if !errored.is_empty() {
+        parts.push(format!("failed: {}", errored.join("; ")));
+    }
+    if !empty_engines.is_empty() {
+        parts.push(format!("{} returned no results", empty_engines.join(", ")));
+    }
+    if !degraded.is_empty() {
+        parts.push(format!("{} returned no relevant results", degraded.join(", ")));
+    }
+    if returned == 0 {
+        parts.push("no result passed the relevance filters".to_string());
+    } else if filtered_out > 0 {
+        parts.push(format!("{filtered_out} candidates dropped by the relevance filters"));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join("; "))
+    }
+}
+
 /// `2401.12345`, `2401.1234v2` — an arXiv identifier in the query.
 fn has_arxiv_id(q: &str) -> bool {
     q.split(|c: char| !(c.is_ascii_digit() || c == '.' || c == 'v'))
@@ -267,7 +306,8 @@ impl Orchestrator {
         }
 
         let cooling = self.cooling();
-        let mut skipped: Vec<&'static str> = Vec::new();
+        let mut cooling_skipped: Vec<&'static str> = Vec::new();
+        let mut quota_skipped: Vec<&'static str> = Vec::new();
         let mut tasks: Vec<(Arc<dyn Engine>, Duration)> = Vec::new();
         for (engine, timeout) in plan
             .primary
@@ -276,13 +316,13 @@ impl Orchestrator {
             .chain(plan.secondary.iter().map(|e| (e, self.config.tier_b_timeout)))
         {
             if cooling.contains(&engine.id()) {
-                skipped.push(engine.id());
+                cooling_skipped.push(engine.id());
                 continue;
             }
             let (capacity, refill_secs) = engine.rate_limit();
             if !self.limiter.try_acquire(engine.id(), capacity, refill_secs) {
                 tracing::debug!(engine = engine.id(), "local quota spent, skipping this query");
-                skipped.push(engine.id());
+                quota_skipped.push(engine.id());
                 continue;
             }
             tasks.push((engine.clone(), timeout.max(engine.timeout_hint())));
@@ -324,10 +364,14 @@ impl Orchestrator {
             }
         }
         if runs.is_empty() {
-            return Err(format!(
-                "no engine could be scheduled (cooling down: {})",
-                skipped.join(", ")
-            ));
+            let mut reason = Vec::new();
+            if !cooling_skipped.is_empty() {
+                reason.push(format!("cooling down: {}", cooling_skipped.join(", ")));
+            }
+            if !quota_skipped.is_empty() {
+                reason.push(format!("local quota spent: {}", quota_skipped.join(", ")));
+            }
+            return Err(format!("no engine could be scheduled ({})", reason.join("; ")));
         }
 
         // Tier C: every engine failed. Retry the one that was not hard-blocked with the
@@ -376,6 +420,8 @@ impl Orchestrator {
         }
 
         let mut degraded: Vec<String> = Vec::new();
+        let mut empty_engines: Vec<String> = Vec::new();
+        let mut errored: Vec<String> = Vec::new();
         let mut sources: Vec<SourceStat> = Vec::new();
         let mut lists: Vec<(f32, Vec<RawItem>)> = Vec::new();
 
@@ -385,13 +431,17 @@ impl Orchestrator {
                     // An exact arXiv identifier is a lookup, not a keyword query: the
                     // returned papers legitimately do not repeat the id in their titles.
                     let id_lookup = run.id == "arxiv" && has_arxiv_id(&req.query.to_lowercase());
+                    let empty = output.items.is_empty();
                     let pass = id_lookup
+                        || empty
                         || output
                             .items
                             .iter()
                             .take(3)
                             .any(|item| terms.passes(&format!("{} {}", item.title, item.snippet)));
-                    if !pass {
+                    if empty {
+                        empty_engines.push(run.id.to_string());
+                    } else if !pass {
                         degraded.push(run.id.to_string());
                         tracing::debug!(engine = run.id, "relevance gate failed, weight x0.3");
                     }
@@ -399,12 +449,13 @@ impl Orchestrator {
                         name: run.id.to_string(),
                         count: output.items.len(),
                         ms: output.elapsed_ms,
-                        status: if pass { "ok".into() } else { "degraded".into() },
+                        status: if empty { "empty".into() } else if pass { "ok".into() } else { "degraded".into() },
                         error: None,
                     });
                     lists.push((if pass { run.weight } else { run.weight * 0.3 }, output.items.clone()));
                 }
                 Err(err) => {
+                    errored.push(format!("{} ({})", run.id, err));
                     sources.push(SourceStat {
                         name: run.id.to_string(),
                         count: 0,
@@ -414,6 +465,25 @@ impl Orchestrator {
                     });
                 }
             }
+        }
+
+        for id in &cooling_skipped {
+            sources.push(SourceStat {
+                name: id.to_string(),
+                count: 0,
+                ms: 0,
+                status: "cooldown".into(),
+                error: Some("blocked upstream earlier; cooling down".into()),
+            });
+        }
+        for id in &quota_skipped {
+            sources.push(SourceStat {
+                name: id.to_string(),
+                count: 0,
+                ms: 0,
+                status: "quota".into(),
+                error: Some("local request quota spent".into()),
+            });
         }
 
         let fused = fusion::fuse(lists, 60.0);
@@ -442,6 +512,7 @@ impl Orchestrator {
             report.kept
         };
 
+        let filtered_out: usize = filter_stats.iter().map(|stat| stat.count).sum();
         let scored = score::score_all(&terms, candidates, &score::Weights::default());
 
         let mut per_domain: HashMap<String, usize> = HashMap::new();
@@ -478,6 +549,17 @@ impl Orchestrator {
             })
             .collect();
 
+        // Built before `degraded` moves into the routing info.
+        let notice = compose_notice(
+            &cooling_skipped,
+            &quota_skipped,
+            &empty_engines,
+            &degraded,
+            &errored,
+            filtered_out,
+            results.len(),
+        );
+
         let routing = RoutingInfo {
             intent: plan.intent,
             primary: plan.primary.iter().map(|e| e.id().to_string()).collect(),
@@ -493,6 +575,7 @@ impl Orchestrator {
                 routing,
                 sources,
                 filters: filter_stats,
+                notice,
             },
             results,
         };
@@ -570,6 +653,20 @@ mod tests {
         let plan = orch.plan(&req("weather in hangzhou"));
         assert_eq!(plan.intent, "general_en");
         assert_eq!(plan.primary[0].id(), "bing");
+    }
+
+    #[test]
+    fn notice_explains_empty_results() {
+        let notice = compose_notice(&["so360"], &[], &["arxiv".to_string()], &["bing".to_string()], &[], 7, 0)
+            .expect("notice expected");
+        assert!(notice.contains("so360 blocked upstream"));
+        assert!(notice.contains("arxiv returned no results"));
+        assert!(notice.contains("no result passed the relevance filters"));
+    }
+
+    #[test]
+    fn clean_result_has_no_notice() {
+        assert!(compose_notice(&[], &[], &[], &[], &[], 0, 3).is_none());
     }
 
     #[test]
