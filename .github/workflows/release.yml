@@ -1,0 +1,99 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset: win-x64.zip
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            asset: linux-x64.tar.gz
+          - os: macos-14
+            target: aarch64-apple-darwin
+            asset: macos-arm64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build
+        run: cargo build --release --locked --target ${{ matrix.target }}
+        env:
+          CARGO_NET_RETRY: 5
+
+      - name: Assemble package
+        shell: bash
+        run: |
+          set -euo pipefail
+          VER="${GITHUB_REF_NAME:-dev}"
+          OUT="dist/mysearch-${VER}-${{ matrix.asset }}"
+          mkdir -p dist pkg/bin
+          if [[ "${{ matrix.asset }}" == *.zip ]]; then
+            cp "target/${{ matrix.target }}/release/mysearch.exe" pkg/bin/
+          else
+            cp "target/${{ matrix.target }}/release/mysearch" pkg/bin/
+          fi
+          cp README.md pkg/
+          cp integrations/skill/SKILL.md pkg/SKILL.md
+          cp -r integrations pkg/integrations
+          cp install.ps1 install.sh pkg/
+          if [[ "${{ matrix.asset }}" == *.zip ]]; then
+            (cd pkg && 7z a -tzip "../$OUT" . > /dev/null)
+          else
+            tar -czf "$OUT" -C pkg .
+          fi
+          ls -l dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/*
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+          body: |
+            Self-hosted search for AI agents — one binary, three entry points (HTTP / MCP stdio / CLI).
+
+            **Install (Windows)**
+
+            ```powershell
+            irm https://raw.githubusercontent.com/my3254/sampleSearch/main/install.ps1 | iex
+            ```
+
+            **Install (macOS / Linux)**
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/my3254/sampleSearch/main/install.sh | bash
+            ```
+
+            The installer drops the binary into a per-user directory, adds it to `PATH`, installs the agent skill,
+            and prints the MCP config. `-InstallDshBundle` (PowerShell) also registers it in DeepSeek Harness.

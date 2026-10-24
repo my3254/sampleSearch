@@ -13,3 +13,11 @@
 # backups created during local installs
 *.bak
 *.bak2
+
+# local deploy key used only to push this repo
+/.ssh-deploy
+
+
+# local installer test scratch
+/.tmp-test
+
