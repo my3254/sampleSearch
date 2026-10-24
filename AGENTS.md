@@ -121,7 +121,7 @@ M1 计划新增：`core/router.rs`（routing.json）、`engines/{declarative,ext
 依赖已 `cargo vendor` 到 `vendor/`（206 个 crate），`.cargo/config.toml` 做了 source replacement + `offline = true`。**必须把 `CARGO_HOME` 指到工作区内**（`~/.cargo` 在沙箱中只读）：
 
 ```powershell
-$env:CARGO_HOME="$PWD\.cargo-home"
+$env:CARGO_HOME="$PWD\.cargo-home"  # 首次：cargo vendor vendor；把 cargo-config.toml.example 复制成 .cargo\config.toml
 cargo build          # ~3s（改代码后增量）
 cargo test           # 29 个单测，全绿
 cargo run            # 服务监听 127.0.0.1:8787

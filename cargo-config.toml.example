@@ -1,0 +1,11 @@
+# Template for an offline build against a local `vendor/` snapshot.
+# Copy to .cargo/config.toml AFTER running `cargo vendor vendor`.
+# Not committed: paths and offline mode are machine-specific, and CI must build online.
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
+
+[net]
+offline = true

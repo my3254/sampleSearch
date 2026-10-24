@@ -13,7 +13,8 @@
 
 ```powershell
 $env:CARGO_HOME="$PWD\.cargo-home"
-cargo vendor vendor          # 一次性：把依赖落到 vendor/（需要能访问 crates.io）
+cargo vendor vendor                      # 一次性：把依赖落到 vendor/（需要能访问 crates.io）
+Copy-Item cargo-config.toml.example .cargo\\config.toml   # 之后即可离线构建
 cargo build --release        # 产物：target\release\samplesearch.exe
 cargo test                   # 29 个单测
 ```
